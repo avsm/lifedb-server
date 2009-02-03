@@ -1,1 +1,10 @@
 ^upstream/
+^\._d/
+\.annot$
+\.cmo$
+\.o$
+\.cma$
+\.cmx$
+\.cmi$
+\.swp$
+^lifedb_server$

@@ -60,10 +60,11 @@ let process2 (cgi : Netcgi.cgi_activation) =
 	  ~content_type:"text/plain; charset=\"iso-8859-1\""
 	  ();
 
-	cgi # output # output_string "Software error\n";
-    cgi # output # output_string "While processing the request an OCaml exception has been raised:\n";
+	cgi # output # output_string "Software exception:\n";
     cgi # output # output_string (Printexc.to_string error);
-
+    cgi # output # output_string "\n";    
+    cgi # output # output_string (Printexc.get_backtrace());
+    cgi # output # output_string "\n";
 	(* Now commit the error page: *)
 	cgi # output # commit_work()
 ;;
