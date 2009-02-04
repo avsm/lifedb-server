@@ -13,7 +13,7 @@ import StringIO
 
 from lifedb import client
 
-class DatabaseTestCase(unittest.TestCase):
+class LoginTestCase(unittest.TestCase):
 
     def setUp(self):
         uri = os.environ.get('LIFEDB_URI', client.DEFAULT_BASE_URI)
@@ -24,16 +24,18 @@ class DatabaseTestCase(unittest.TestCase):
 
     def test_login_success(self):
         data = self.server.login('foo', 'bar')
-        self.assert_('session' in data)
-        self.assert_(len(data['session']) == 36)
+        self.assert_('session' in data)  # session has been returned
+        self.assert_(len(data['session']) == 36) # it is a UUID4
+        self.assertEquals(data['session'], data['session'].upper()) # in uppercase
+        return data
         
     def test_login_failure(self):
         self.assertRaises(client.ResourceForbidden, self.server.login, 'bar', 'foo')
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(DatabaseTestCase, 'test'))
-    suite.addTest(doctest.DocTestSuite(client))
+    suite.addTest(unittest.makeSuite(LoginTestCase, 'test'))
+    #suite.addTest(doctest.DocTestSuite(client))
     return suite
 
 
