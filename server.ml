@@ -83,22 +83,10 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
 let start() =
   let (opt_list, cmdline_cfg) = Netplex_main.args() in
 
-  let use_mt = ref false in
-
-  let opt_list' =
-    [ "-mt", Arg.Set use_mt,
-      "  Use multi-threading instead of multi-processing"
-    ] @ opt_list in
-
-  Arg.parse 
-    opt_list'
+  Arg.parse
+    opt_list
     (fun s -> raise (Arg.Bad ("Don't know what to do with: " ^ s)))
-    "usage: netplex [options]";
-  let parallelizer = 
-    if !use_mt then
-      Netplex_mt.mt()     (* multi-threading *)
-    else
-      Netplex_mp.mp() in  (* multi-processing *)
+    (sprintf "Usage: %s [options]" Sys.argv.(0));
   let adder =
     { Nethttpd_services.dyn_handler = (fun _ -> process1);
       dyn_activation = Nethttpd_services.std_activation `Std_activation_buffered;
@@ -110,13 +98,14 @@ let start() =
     Nethttpd_plex.nethttpd_factory
       ~handlers:[ "url_handler", adder ]
       () in
+  Random.self_init ();
   Netplex_main.startup
-    parallelizer
+    (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
     [ nethttpd_factory ]           (* make this nethttpd available *)
-    cmdline_cfg
-;;
+  cmdline_cfg
 
-Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
-start();;
+let _ = 
+    Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
+    start()
