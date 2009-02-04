@@ -1,0 +1,17 @@
+Metadata-Version: 1.0
+Name: LifeDB
+Version: 0.1
+Summary: Python library for working with LifeDB
+Home-page: http://www.clinklabs.com/
+Author: Anil Madhavapeddy
+Author-email: anil@recoil.org
+License: BSD
+Description: This is a Python library for LifeDB.
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: Database :: Front-Ends
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
