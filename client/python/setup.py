@@ -123,7 +123,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     packages = ['lifedb'],
-#    test_suite = 'couchdb.tests.suite',
+    test_suite = 'lifedb.tests.suite',
 
     install_requires = ['httplib2'],
 
@@ -136,5 +136,5 @@ setup(
 #        ],
 #    },
 
-    cmdclass = {'build_doc': build_doc, 'test_doc': test_doc}
+#    cmdclass = {'build_doc': build_doc, 'test_doc': test_doc}
 )

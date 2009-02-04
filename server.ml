@@ -13,7 +13,7 @@ open Printf;;
 let generate_page (cgi : Netcgi.cgi_activation) =
   match cgi # request_method with
   |`POST ->
-      Lifedb_rpc.pp cgi
+      Lifedb_dispatch.dispatch cgi
   | _ -> 
       cgi # set_header ~status:`Not_implemented
   	  ~cache:`No_cache
@@ -94,8 +94,13 @@ let start() =
       dyn_translator = (fun _ -> ""); (* not needed *)
       dyn_accept_all_conditionals = false;
     } in
+  let config_cgi = { Netcgi1_compat.Netcgi_env.default_config with
+          Netcgi1_compat.Netcgi_env.permitted_input_content_types = [ "application/json" ]
+  } in
+  
   let nethttpd_factory = 
     Nethttpd_plex.nethttpd_factory
+      ~config_cgi: config_cgi
       ~handlers:[ "url_handler", adder ]
       () in
   Random.self_init ();

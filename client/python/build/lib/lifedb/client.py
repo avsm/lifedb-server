@@ -58,10 +58,6 @@ class ServerError(Exception):
     to a request.
     """
 
-class ResourceForbidden(Exception):
-    """Exception raised when a login request fails or an invalid session is passed
-    to a request.
-    """
 
 class Server(object):
     """Representation of a LifeDB server.
@@ -116,10 +112,6 @@ class Server(object):
         self.resource.put(validate_dbname(name))
         return self[name]
 
-    def login(self, username, password):
-        resp, data = self.resource.post('/login', content={ 'username' : username, 'password' : password } )
-        return data
-        
 # Internals
 
 
@@ -192,8 +184,6 @@ class Resource(object):
                 error = data
             if status_code == 404:
                 raise ResourceNotFound(error)
-            elif status_code == 403:
-                raise ResourceForbidden(error)
             else:
                 raise ServerError((status_code, error))
 

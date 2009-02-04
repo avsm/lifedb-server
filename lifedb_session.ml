@@ -1,15 +1,13 @@
 (*pp $PP *)
 (* Authentication and session handling *)
 
-type json rpc_login_params = < 
+type json rpc_login_request = < 
     username : string;
     password : string;
     ?crypto: string option >
 
-type json rpc_login_result = Success | Failure 
-and  rpc_login_response = {
-    result : rpc_login_result;
-    ?session : string option
+type json rpc_login_response = {
+    session : string
 }
 
 type session_entry = {
@@ -38,13 +36,13 @@ let register_session () =
     session_key
     
 let dispatch cgi p =
-    let params = rpc_login_params_of_json (Json_io.json_of_string p) in
-    let result = match params#username, params#password with
+    let params = rpc_login_request_of_json (Json_io.json_of_string p) in
+    match params#username, params#password with
     |"foo","bar" -> 
-        let session = register_session () in
-        { result = Success; session = Some session }
-    |_ -> { result = Failure; session = None } in
-    cgi#output#output_string (Json_io.string_of_json (json_of_rpc_login_response result))
+        let session = { session = register_session () } in
+        cgi#output#output_string (Json_io.string_of_json (json_of_rpc_login_response session))
+    |_ ->
+        Lifedb_rpc.return_error cgi `Forbidden "Login failed" "Invalid username or password"
     
 let session_expiry_time = 86400. (* one day *)
 
