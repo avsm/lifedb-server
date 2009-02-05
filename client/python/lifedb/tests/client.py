@@ -17,21 +17,34 @@ class LoginTestCase(unittest.TestCase):
 
     def setUp(self):
         uri = os.environ.get('LIFEDB_URI', client.DEFAULT_BASE_URI)
+        self.username = os.environ.get('LIFEDB_TEST_USERNAME', 'foo')
+        self.password = os.environ.get('LIFEDB_TEST_PASSWORD', 'bar')
         self.server = client.Server(uri)
-
+        self.session = None
+        
     def tearDown(self):
         pass
 
+    def doLogin(self):
+        self.server.login(self.username, self.password)
+        
     def test_login_success(self):
-        data = self.server.login('foo', 'bar')
-        self.assert_('session' in data)  # session has been returned
-        self.assert_(len(data['session']) == 36) # it is a UUID4
-        self.assertEquals(data['session'], data['session'].upper()) # in uppercase
-        return data
+        self.server.login(self.username, self.password)
+        self.assert_(self.server.session())  # session has been returned
+        self.assert_(len(self.server.session()) == 36) # it is a UUID4
+        self.assertEquals(self.server.session(), self.server.session().upper()) # in uppercase
         
     def test_login_failure(self):
         self.assertRaises(client.ResourceForbidden, self.server.login, 'bar', 'foo')
 
+    def test_logged_in_ping(self):
+        self.doLogin()
+        data = self.server.ping()
+        self.assertEquals(data, "pong")
+        
+    def test_not_logged_in_ping(self):
+        self.assertRaises(client.ResourceForbidden, self.server.ping)
+        
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(LoginTestCase, 'test'))

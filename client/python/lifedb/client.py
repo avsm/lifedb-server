@@ -105,20 +105,16 @@ class Server(object):
         :type: `unicode`
         """)
 
-    def create(self, name):
-        """Create a new database with the given name.
-
-        :param name: the name of the database
-        :return: a `Database` object representing the created database
-        :rtype: `Database`
-        :raise ResourceConflict: if a database with that name already exists
-        """
-        self.resource.put(validate_dbname(name))
-        return self[name]
-
     def login(self, username, password):
         resp, data = self.resource.post('/login', content={ 'username' : username, 'password' : password } )
+        self.resource.session = data['session']
+        
+    def ping(self):
+        resp, data = self.resource.get(path='/ping')
         return data
+        
+    def session(self):
+        return self.resource.session
         
 # Internals
 
@@ -131,6 +127,7 @@ class Resource(object):
             http.force_exception_to_status_code = False
         self.http = http
         self.uri = uri
+        self.session = None
 
     def __call__(self, path):
         return type(self)(self.http, uri(self.uri, path))
@@ -158,6 +155,8 @@ class Resource(object):
         headers = headers or {}
         headers.setdefault('Accept', 'application/json')
         headers.setdefault('User-Agent', 'lifedb-python %s' % __version__)
+        if self.session:
+            headers.setdefault('Session', self.session)
         body = None
         if content is not None:
             if not isinstance(content, basestring):

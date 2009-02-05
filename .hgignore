@@ -8,5 +8,5 @@
 \.cmi$
 \.swp$
 ^lifedb_server$
-^client/python/LifeDB-egg\.info$
+^client/python/LifeDB.egg-info$
 \.pyc$
