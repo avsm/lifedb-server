@@ -20,8 +20,9 @@ let session_table = Hashtbl.create 1
 let with_lock fn =
     Mutex.lock m;
     try
-        fn ();
+        let r = fn () in
         Mutex.unlock m;
+        r
     with e ->
         Mutex.unlock m;
         raise e
@@ -33,6 +34,8 @@ let register_session () =
         Hashtbl.add session_table session_key
             { last_accessed = current_time }
     );
+    let cont = Netplex_cenv.self_cont() in
+    cont#log `Debug (Printf.sprintf "New session: %s" session_key);
     session_key
     
 let dispatch cgi p =
@@ -43,6 +46,10 @@ let dispatch cgi p =
         cgi#output#output_string (Json_io.string_of_json (json_of_rpc_login_response session))
     |_ ->
         Lifedb_rpc.return_error cgi `Forbidden "Login failed" "Invalid username or password"
-    
-let session_expiry_time = 86400. (* one day *)
 
+let check_valid session =
+    with_lock (fun () ->
+        Hashtbl.mem session_table session
+    )
+            
+let session_expiry_time = 86400. (* one day *)

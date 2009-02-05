@@ -10,16 +10,6 @@
 open Netcgi1_compat.Netcgi_types;;
 open Printf;;
 
-let generate_page (cgi : Netcgi.cgi_activation) =
-  match cgi # request_method with
-  |`POST ->
-      Lifedb_dispatch.dispatch cgi
-  | _ -> 
-      cgi # set_header ~status:`Not_implemented
-  	  ~cache:`No_cache
-  	  ~content_type:"text/plain; charset=\"iso-8859-1\"" ();
-  	  cgi # output # output_string "Request method not implemented"
-
 
 let process2 (cgi : Netcgi.cgi_activation) =
   (* The [try] block catches errors during the page generation. *)
@@ -37,11 +27,12 @@ let process2 (cgi : Netcgi.cgi_activation) =
       ~content_type:"text/html; charset=\"iso-8859-1\""
       ();
 
-    generate_page cgi;
+    Lifedb_dispatch.dispatch cgi;
 
     (* After the page has been fully generated, we can send it to the
      * browser. 
      *)
+     
     cgi # output # commit_work();
   with
       error ->
@@ -95,7 +86,8 @@ let start() =
       dyn_accept_all_conditionals = false;
     } in
   let config_cgi = { Netcgi1_compat.Netcgi_env.default_config with
-          Netcgi1_compat.Netcgi_env.permitted_input_content_types = [ "application/json" ]
+          Netcgi1_compat.Netcgi_env.permitted_input_content_types = 
+            [ "application/json"; "application/x-www-form-urlencoded" ]
   } in
   
   let nethttpd_factory = 
@@ -104,6 +96,7 @@ let start() =
       ~handlers:[ "url_handler", adder ]
       () in
   Random.self_init ();
+  
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)

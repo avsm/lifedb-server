@@ -1,32 +1,51 @@
 open Printf
 open Lifedb_rpc
 
+(* If this is an RPC, mark the header as such and retrieve the JSON string *)
+let mark_rpc (cgi : Netcgi.cgi_activation) =
+    let args = cgi#arguments in
+    cgi#set_header ~cache:`No_cache ~content_type:"application/json" ();
+    if List.length args != 1 then raise (Invalid_rpc "POST arguments != 1");
+    (List.hd args)#value
+
 let dispatch (cgi : Netcgi.cgi_activation) =
     let cont = Netplex_cenv.self_cont() in
-    let out = cgi # output # output_string in
     let url = Neturl.parse_url (cgi#url ()) in
     let url_path = Neturl.join_path (Neturl.url_path url) in
     cont#log `Debug (sprintf "Lifedb_rpc: dispatching url=%s" url_path);
-    cgi#set_header  ~cache:`No_cache 
-        ~content_type:"application/json" ();
-    try 
-        match url_path with
-        |"" -> raise (Invalid_rpc "func not specified")
-        |"/login" ->
-            if List.length cgi#arguments != 1 then raise (Invalid_rpc "login: POST arguments != 1");
-            Lifedb_session.dispatch cgi (List.hd cgi#arguments)#value
-        |"/cache" -> begin
-           let p = cgi#argument_value "" in
-           Lifedb_cache.lockfn (fun () ->
-               let v = Lifedb_cache.get () in
-               Thread.delay (Random.float 1.);
-               let v' = p :: v in
-               Lifedb_cache.set v';
-               out (String.concat "," v');
-           );
-           out "\n";
-        end 
-        |_ -> raise (Invalid_rpc "func unknown")
-    with
-    |Invalid_rpc reason ->
-        return_error cgi `Bad_request "Invalid RPC" reason
+    (* check for a valid session *)
+    let session = cgi#environment#input_header_field ~default:"" "session" in
+    match Lifedb_session.check_valid session with
+    (* not authenticated *)
+    |false -> begin
+        match cgi#request_method, url_path with
+        |`POST, "/login" ->
+            Lifedb_session.dispatch cgi (mark_rpc cgi)
+        |(`HEAD|`GET), "/ping" ->
+            return_error cgi `Forbidden "Invalid session" "Login before pinging"
+        |_ -> 
+            return_error cgi `Forbidden "Invalid session" "No valid session header found"
+    end
+    (* authenticated *)
+    |true -> begin
+        try 
+            match cgi#request_method, url_path with
+            |`POST, "/cache" -> begin
+               let out = cgi # output # output_string in
+               let p = mark_rpc cgi in
+               Lifedb_cache.lockfn (fun () ->
+                   let v = Lifedb_cache.get () in
+                   Thread.delay (Random.float 1.);
+                   let v' =  p :: v in
+                   Lifedb_cache.set v';
+                   out (String.concat "," v');
+               );
+               out "\n";
+            end 
+            |(`HEAD|`GET), "/ping" ->
+                cgi#output#output_string "pong";
+            |_ -> raise (Invalid_rpc "Unknown request")
+        with
+        |Invalid_rpc reason ->
+            return_error cgi `Bad_request "Invalid RPC" reason
+    end
