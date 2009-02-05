@@ -27,15 +27,16 @@ class LoginTestCase(unittest.TestCase):
 
     def doLogin(self):
         self.server.login(self.username, self.password)
-        
-    def test_login_success(self):
-        self.server.login(self.username, self.password)
         self.assert_(self.server.session())  # session has been returned
         self.assert_(len(self.server.session()) == 36) # it is a UUID4
         self.assertEquals(self.server.session(), self.server.session().upper()) # in uppercase
         
+    def test_login_success(self):
+        self.doLogin()
+        
     def test_login_failure(self):
         self.assertRaises(client.ResourceForbidden, self.server.login, 'bar', 'foo')
+        self.assertRaises(client.ResourceForbidden, self.server.login, '', '')
 
     def test_logged_in_ping(self):
         self.doLogin()
@@ -43,6 +44,13 @@ class LoginTestCase(unittest.TestCase):
         self.assertEquals(data, "pong")
         
     def test_not_logged_in_ping(self):
+        self.assertRaises(client.ResourceForbidden, self.server.ping)
+        
+    def test_logout(self):
+        self.doLogin()
+        data = self.server.ping ()
+        self.assertEquals(data, "pong")
+        self.server.logout()
         self.assertRaises(client.ResourceForbidden, self.server.ping)
         
 def suite():

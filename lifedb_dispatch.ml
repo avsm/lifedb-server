@@ -20,7 +20,8 @@ let dispatch (cgi : Netcgi.cgi_activation) =
     |false -> begin
         match cgi#request_method, url_path with
         |`POST, "/login" ->
-            Lifedb_session.dispatch cgi (mark_rpc cgi)
+            let arg = mark_rpc cgi in
+            Lifedb_session.dispatch cgi (`Login arg)
         |(`HEAD|`GET), "/ping" ->
             return_error cgi `Forbidden "Invalid session" "Login before pinging"
         |_ -> 
@@ -42,6 +43,9 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                );
                out "\n";
             end 
+            |`POST, "/logout" -> begin
+               Lifedb_session.dispatch cgi (`Logout session)
+            end
             |(`HEAD|`GET), "/ping" ->
                 cgi#output#output_string "pong";
             |_ -> raise (Invalid_rpc "Unknown request")

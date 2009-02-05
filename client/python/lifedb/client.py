@@ -108,7 +108,12 @@ class Server(object):
     def login(self, username, password):
         resp, data = self.resource.post('/login', content={ 'username' : username, 'password' : password } )
         self.resource.session = data['session']
-        
+       
+    def logout(self):
+        if self.resource.session:
+            resp, data = self.resource.post('/logout', content={})
+            self.resource.session = None
+ 
     def ping(self):
         resp, data = self.resource.get(path='/ping')
         return data
