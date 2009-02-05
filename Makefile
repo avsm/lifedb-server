@@ -1,5 +1,7 @@
 OCAMLMAKEFILE = OCamlMakefile
 
+PYTHON ?= python
+
 ANNOTATE = yes
 export ANNOTATE
 DEBUG = yes
@@ -28,5 +30,9 @@ run:
 .PHONY: stop
 stop:
 	netplex-admin -shutdown
+
+.PHONY: test
+test:
+	cd client/python && $(PYTHON) setup.py test
 
 include $(OCAMLMAKEFILE)
