@@ -56,11 +56,12 @@ let start() =
       () in
   Random.self_init ();
   
+  let worker_factory = Lifedb_session.session_singleton () in
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory ]           (* make this nethttpd available *)
+    [ nethttpd_factory; worker_factory ]           (* make this nethttpd available *)
   cmdline_cfg
 
 let _ = 
