@@ -31,18 +31,6 @@ let dispatch (cgi : Netcgi.cgi_activation) =
     |true -> begin
         try 
             match cgi#request_method, url_path with
-            |`POST, "/cache" -> begin
-               let out = cgi # output # output_string in
-               let p = mark_rpc cgi in
-               Lifedb_cache.lockfn (fun () ->
-                   let v = Lifedb_cache.get () in
-                   Thread.delay (Random.float 1.);
-                   let v' =  p :: v in
-                   Lifedb_cache.set v';
-                   out (String.concat "," v');
-               );
-               out "\n";
-            end 
             |`POST, "/logout" -> begin
                Lifedb_session.dispatch cgi (`Logout session)
             end
