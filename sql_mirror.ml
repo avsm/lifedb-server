@@ -20,18 +20,7 @@ external read_next_dir : Unix.dir_handle -> string = "unix_read_next_dir"
 
 open Unix
 open Printf
-
-let try_final fn finalfn =
-  begin
-  try fn ()
-  with e -> (finalfn(); raise e) end;
-  finalfn ()
-
-let repeat_until_eof fn =
-   try while true do
-      fn ()
-   done 
-   with End_of_file -> ()
+open Utils
 
 let walk_directory_tree dir walkfn =
   let rec walk dir =

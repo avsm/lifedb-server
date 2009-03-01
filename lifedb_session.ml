@@ -2,6 +2,7 @@
 (* Authentication and session handling *)
 
 open Printf
+open Utils
 
 type json rpc_login_request = < 
     username : string;
@@ -20,16 +21,6 @@ exception Too_many_sessions
 
 let m = Mutex.create ()
 let session_table = Hashtbl.create 1
-
-let with_lock fn =
-    Mutex.lock m;
-    try
-        let r = fn () in
-        Mutex.unlock m;
-        r
-    with e ->
-        Mutex.unlock m;
-        raise e
 
 let session_expiry_time = 86400. (* one day *)
 let max_sessions = 1000
@@ -64,7 +55,7 @@ let register_session () =
     end;
     let session_key = Uuidm.to_string ~upper:true (Uuidm.create `V4) in
     let current_time = Unix.gettimeofday () in
-    with_lock (fun () ->
+    with_lock m (fun () ->
         Hashtbl.add session_table session_key
             { last_accessed = current_time }
     );
@@ -72,7 +63,7 @@ let register_session () =
     session_key
   
 let destroy_session session =
-    with_lock (fun () ->
+    with_lock m (fun () ->
         Hashtbl.remove session_table session
     )
 
@@ -90,7 +81,7 @@ let dispatch cgi = function
        destroy_session session
        
 let check_valid session =
-    with_lock (fun () ->
+    with_lock m (fun () ->
         try
             let _ = Hashtbl.find session_table session in
             let new_session_info = { last_accessed = Unix.gettimeofday() } in
@@ -113,7 +104,7 @@ let singleton () =
             ignore(Thread.create (fun () ->
                 while signal_stop do
                     c#log `Info (sprintf "Cleaning up session table");
-                    let expired = with_lock expire_sessions in
+                    let expired = with_lock m expire_sessions in
                     List.iter (fun (sess, v) ->
                         c#log `Debug (sprintf "Expired session: %s (%f)" sess v.last_accessed)
                     ) expired;
@@ -127,7 +118,7 @@ let singleton () =
             match msg,args with
             |"session",[|"dump"|] ->
                 c#log `Debug "Dumping session table";
-                with_lock (fun () ->
+                with_lock m (fun () ->
                     Hashtbl.iter (fun k v ->
                         c#log `Debug (sprintf "%s: %f" k v.last_accessed)
                     ) session_table
