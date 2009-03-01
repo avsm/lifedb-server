@@ -102,7 +102,7 @@ let check_valid session =
             false
     )
 
-let session_singleton () =
+let singleton () =
     let hooks = object
         inherit Netplex_kit.empty_processor_hooks() as super
 

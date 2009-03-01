@@ -48,6 +48,10 @@ let dispatch (cgi : Netcgi.cgi_activation) =
             end
             |(`HEAD|`GET), "/ping" ->
                 cgi#output#output_string "pong";
+            |`POST, "/mirror" -> begin
+               let arg = mark_rpc cgi in
+               Sql_mirror.dispatch cgi arg
+            end
             |_ -> raise (Invalid_rpc "Unknown request")
         with
         |Invalid_rpc reason ->

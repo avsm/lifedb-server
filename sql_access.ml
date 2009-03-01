@@ -22,7 +22,7 @@ let rec db_busy_retry fn =
     match fn () with
     |Rc.BUSY -> 
        print_endline "WARNING: busy";
-       Unix.sleep 1;
+       Thread.delay (Random.float 1.);
        db_busy_retry fn
     |x -> x
 

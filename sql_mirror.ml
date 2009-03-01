@@ -304,7 +304,50 @@ let init_db dbname =
   db#register_map;
   db
 
-let do_mirror lifedb_path =
-  let dbname = Filename.concat lifedb_path "life.db" in
-  let db = init_db dbname in
+let do_mirror lifedb_path db =
   walk_directory_tree lifedb_path (check_directory db lifedb_path)
+
+let dispatch cgi args =
+  ()
+
+let singleton path =
+    let hooks = object
+        inherit Netplex_kit.empty_processor_hooks() as super
+
+        val mutable signal_stop = true
+        val mutable loop_delay_time = 10.
+        val mutable lifedb_path = path
+
+        method post_start_hook c =
+            super#post_start_hook c;
+            let dbname = Filename.concat lifedb_path "life.db" in
+            let db = init_db dbname in
+            ignore(Thread.create (fun () ->
+                while signal_stop do
+                    c#log `Info (sprintf "Initiating a sync");
+                    do_mirror lifedb_path db;
+                    Thread.delay loop_delay_time;
+                done;
+                c#log `Debug "Terminating session cleanup thread"
+            ) ())
+
+        method receive_admin_message c msg args =
+            c#log `Info (sprintf "received admin msg %s %s" msg (String.concat "," (Array.to_list args)));
+            match msg,args with
+            |_ -> ()
+
+        method shutdown () =
+            signal_stop <- false;
+            super#shutdown ()
+    end in
+
+    object (self)
+        method name = "sql_mirror"
+        method create_processor _ _ _ =
+            object (self)
+            inherit Netplex_kit.processor_base hooks
+            method process ~when_done _ _ _ = when_done () (* should not ever be called *)
+            method supported_ptypes = [ `Multi_threading ]
+        end
+    end
+
