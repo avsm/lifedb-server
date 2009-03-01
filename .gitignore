@@ -1,0 +1,11 @@
+._d/
+*.annot
+*.cmo
+*.o
+*.cma
+*.cmx
+*.cmi
+*.swp
+*.pyc
+/lifedb_server
+/client/python/LifeDB.egg-info
