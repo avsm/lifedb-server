@@ -117,7 +117,22 @@ class Server(object):
     def ping(self):
         resp, data = self.resource.get(path='/ping')
         return data
-        
+       
+    def task_create(self, name, mode, cmd, period=None):
+        args = { 'name':name, 'mode':mode, 'cmd':cmd, 'period':period }
+        if period:
+           args['period'] = period
+        resp, data = self.resource.post(path='/task_create', content = args)
+        return data
+
+    def task_destroy(self, name):
+        resp, data = self.resource.post(path='/task_destroy', content = { 'name':name })
+        return data
+
+    def task_list(self):
+        resp, data = self.resource.get(path="/task_list")
+        return data
+
     def session(self):
         return self.resource.session
         

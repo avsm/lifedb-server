@@ -66,7 +66,7 @@ let start() =
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory; session_factory; sql_mirror_factory; task_factory ]
+    [ nethttpd_factory; session_factory; task_factory; sql_mirror_factory ] 
   cmdline_cfg
 
 let _ = 
