@@ -101,7 +101,7 @@ let destroy_task name =
     |None -> raise (Task_error "task not found")
 
 let dispatch cgi = function
-   |`Create p -> begin
+   |`Create p ->
        let params = rpc_task_create_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
            match find_task params#name with
@@ -115,8 +115,7 @@ let dispatch cgi = function
                   Lifedb_rpc.return_error cgi `Bad_request "Task error" err
            end
        )
-   end
-   |`Get name -> begin
+   |`Get name ->
        with_lock m (fun () ->
            match find_task name with
            |Some state ->
@@ -124,15 +123,13 @@ let dispatch cgi = function
            |None ->
                Lifedb_rpc.return_error cgi `Not_found "Task error" "Task not found"
        )
-   end
-   |`List -> begin
+   |`List ->
        with_lock m (fun () ->
            let resp = Hashtbl.create 1 in
            Hashtbl.iter (fun name state -> Hashtbl.add resp name (json_of_task state)) task_list;
            cgi#output#output_string (Json_io.string_of_json (json_of_rpc_task_list resp))
        )
-   end
-   |`Destroy p -> begin
+   |`Destroy p ->
        let params = rpc_task_destroy_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
            try
@@ -140,7 +137,6 @@ let dispatch cgi = function
            with |Task_error err ->
                Lifedb_rpc.return_error cgi `Bad_request "Task error" err
        )
-   end
 
 let singleton () =
     let hooks = object
