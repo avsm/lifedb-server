@@ -98,10 +98,17 @@ class TasksTestCase(BaseTestCase):
         self.doLogin()
         self.server.task_create("xxx","single", "sleep 10000")
         task = self.server.task_get("xxx")
-        print task
         self.assertEquals(task['cmd'], 'sleep 10000')
         self.destroy_and_check('xxx')
         self.server.logout()
+
+    def test_task_negative_get(self):
+        self.doLogin()
+        self.assertRaises(client.ResourceNotFound, self.server.task_get, "nonexistent")
+        self.server.logout()
+
+    def test_task_get_not_logged_in(self):
+        self.assertRaises(client.ResourceForbidden, self.server.task_get, "nonexistent")
 
     def test_task_create_invalid(self):
         self.doLogin()
