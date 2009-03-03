@@ -1,0 +1,20 @@
+OCAMLMAKEFILE = OCamlMakefile
+
+ANNOTATE = yes
+export ANNOTATE
+DEBUG = yes
+export DEBUG
+
+OCAMLRUNPARAM=b
+export OCAMLRUNPARAM
+
+SOURCES= fork_helper.ml forktest.ml
+THREADS=yes
+RESULT=forktest
+PACKS=unix str
+
+.PHONY: all
+all: dnc
+	@ :
+
+include $(OCAMLMAKEFILE)
