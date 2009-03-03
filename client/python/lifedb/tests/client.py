@@ -104,19 +104,28 @@ class TasksTestCase(BaseTestCase):
         max_tasks = 10
         self.doLogin()
         for t in range(max_tasks):
-            self.server.task_create("foo%d" % t, "single", "sleep 10000%d" % t)
+            self.server.task_create("foo%d" % t, "single", "echo 10000%d" % t)
         for t in range(5):
             self.assertRaises(client.ServerError, self.server.task_create, 
-                "bar", "single", "sleep 10000")
+                "bar", "single", "echo fail")
         for t in range(max_tasks):
             self.server.task_destroy("foo%d" % t)
+        self.server.logout()
+
+    def long_test_task_fd_leak(self):
+        self.doLogin()
+        for t in range(2000):
+           self.server.task_create("foo", "single", "echo foo %s" % t)
+           self.server.task_create("bar", "single", "false")
+           self.server.task_destroy("foo")
+           self.server.task_destroy("bar")
         self.server.logout()
    
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(LoginTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksTestCase, 'test'))
-    #suite.addTest(doctest.DocTestSuite(client))
+    #suite.addTest(unittest.makeSuite(TasksTestCase, 'long_test'))
     return suite
 
 

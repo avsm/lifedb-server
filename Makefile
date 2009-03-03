@@ -11,11 +11,11 @@ OCAMLRUNPARAM=b
 export OCAMLRUNPARAM
 
 USE_CAMLP4 := yes
-SOURCES= custom_unix_stubs.c utils.ml sql_access.ml sql_mirror.ml \
+SOURCES= custom_unix_stubs.c fork_helper.ml utils.ml sql_access.ml sql_mirror.ml \
 	lifedb_rpc.ml lifedb_session.ml lifedb_tasks.ml lifedb_dispatch.ml server.ml
 THREADS=yes
 RESULT=lifedb_server
-PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3
+PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3 str
 
 PP=./camlp4find $(PACKS)
 export PP
