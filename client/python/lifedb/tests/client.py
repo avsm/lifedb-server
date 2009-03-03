@@ -10,6 +10,7 @@ import doctest
 import os
 import unittest
 import StringIO
+import time
 
 from lifedb import client
 
@@ -74,14 +75,16 @@ class TasksTestCase(BaseTestCase):
         self.assertRaises(client.ResourceForbidden, self.server.task_create, 
              "foo", "single", "echo hello")
     
-    def test_task_periodic_create(self):
+    def long_test_task_periodic_create(self):
         self.doLogin()
-        self.server.task_create("bar","periodic","echo ppp",period=60)
+        period=3
+        self.server.task_create("bar","periodic","echo ppp",period=period)
         tasks = self.server.task_list()
         self.assert_('bar' in tasks)
         self.assertEquals(tasks['bar']['mode'], 'periodic')
         self.assertEquals(tasks['bar']['cmd'], 'echo ppp')
-        self.assertEquals(tasks['bar']['period'], 60)
+        self.assertEquals(tasks['bar']['period'], period)
+        time.sleep(period*4+1)
         self.destroy_and_check("bar")
         self.server.logout()
 
@@ -120,7 +123,7 @@ class TasksTestCase(BaseTestCase):
         max_tasks = 10
         self.doLogin()
         for t in range(max_tasks):
-            self.server.task_create("foo%d" % t, "single", "echo 10000%d" % t)
+            self.server.task_create("foo%d" % t, "single", "sleep 10000%d" % t)
         for t in range(5):
             self.assertRaises(client.ServerError, self.server.task_create, 
                 "bar", "single", "echo fail")
@@ -128,7 +131,7 @@ class TasksTestCase(BaseTestCase):
             self.server.task_destroy("foo%d" % t)
         self.server.logout()
 
-    def long_test_task_fd_leak(self):
+    def very_long_test_task_fd_leak(self):
         self.doLogin()
         for t in range(2000):
            self.server.task_create("foo", "single", "echo foo %s" % t)
@@ -141,7 +144,8 @@ def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(LoginTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksTestCase, 'test'))
-    #suite.addTest(unittest.makeSuite(TasksTestCase, 'long_test'))
+    suite.addTest(unittest.makeSuite(TasksTestCase, 'long_test'))
+    #suite.addTest(unittest.makeSuite(TasksTestCase, 'very_long_test'))
     return suite
 
 

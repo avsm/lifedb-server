@@ -8,7 +8,7 @@ type status =
   |Killed of int
 
 type task = {
-  thread: Thread.t;
+  thread: Thread.t option;
   status: status ref;
 }
   
@@ -24,6 +24,9 @@ let pid_of_status = function
 
 let string_of_task t = string_of_status !(t.status)
 let pid_of_task t = pid_of_status !(t.status)
+let status_of_task t = !(t.status)
+
+let blank_task () = { thread=None; status=(ref Not_started) }
 
 let fork_and_connect_fds cmd =
    let pin_r, pin_w = pipe () in
@@ -83,11 +86,11 @@ let fork_and_read cmd status outfn errfn =
 let create cmd outfn errfn =
    let status = ref Not_started in
    let t = Thread.create (fork_and_read cmd status outfn) errfn in
-   { status = status; thread = t }
+   { status = status; thread = Some t }
 
 let destroy t =
    let _ = match !(t.status) with
    |Running pid -> kill pid Sys.sigterm
    |_ -> () in
-   Thread.join t.thread;
+   let () = match t.thread with |Some t -> Thread.join t |None -> () in
    !(t.status)

@@ -35,12 +35,14 @@ type task_mode =
 
 type task_state = {
    cmd: string;
-   mode: task_mode; 
+   mode: task_mode;
+   start_time: float; 
    running: Fork_helper.task;
 }
 
 let task_list = Hashtbl.create 1
 let task_table_limit = 10
+let task_poll_period = ref 1.
 
 let json_of_task t =
    let mode,period = match t.mode with
@@ -86,7 +88,8 @@ let create_task params =
     let outfn = print_endline in
     let errfn = print_endline in
     let task_status = Fork_helper.create params#cmd outfn errfn in
-    let task = { cmd=params#cmd; mode=mode; running=task_status } in
+    let now_time = Unix.gettimeofday () in
+    let task = { cmd=params#cmd; mode=mode; start_time=now_time; running=task_status } in
     Hashtbl.add task_list params#name task;
     Netplex_cenv.logf `Debug "Added task: %s" (string_of_task task)
 
@@ -99,6 +102,45 @@ let destroy_task name =
             (Fork_helper.string_of_status final_status);
     end
     |None -> raise (Task_error "task not found")
+
+let reschedule_task c name task =
+    match task.mode with 
+    |Single -> ()
+    |Constant ->
+         c#log `Debug (sprintf "restarting %s (constant)" name);
+         let task_status = Fork_helper.create task.cmd print_endline print_endline in
+         let now_time = Unix.gettimeofday () in
+         let task = { cmd=task.cmd; mode=Constant; start_time=now_time; running=task_status } in
+         Hashtbl.add task_list name task
+    |Periodic p ->
+         let start_time = Unix.gettimeofday () +. (float p) in
+         let task_status = Fork_helper.blank_task () in
+         let task = { cmd=task.cmd; mode=Periodic p; start_time=start_time; running=task_status } in
+         Hashtbl.add task_list name task;
+         c#log`Debug (sprintf "scheduling %s: %s" name (Fork_helper.string_of_task task_status))
+
+let task_sweep c =
+    Hashtbl.iter (fun name task ->
+       let td = Fork_helper.string_of_task task.running in
+       match Fork_helper.status_of_task task.running with
+       |Fork_helper.Running pid ->
+           c#log `Debug (sprintf "sweep: %s" td)
+       |Fork_helper.Not_started ->
+           let curtime = Unix.gettimeofday () in
+           if task.start_time < curtime then begin
+               let task_status = Fork_helper.create task.cmd print_endline print_endline in
+               let task = { task with start_time=curtime; running=task_status } in
+               Hashtbl.replace task_list name task
+           end
+       |Fork_helper.Done exit_code ->
+           c#log `Debug (sprintf "sweep: finished %s" td);
+           Hashtbl.remove task_list name;
+           reschedule_task c name task;
+       |Fork_helper.Killed signal ->
+           c#log `Debug (sprintf "sweep: crashed %s" td);
+           Hashtbl.remove task_list name;
+           reschedule_task c name task;
+    ) task_list
 
 let dispatch cgi = function
    |`Create p ->
@@ -148,8 +190,8 @@ let singleton () =
             super#post_start_hook c;
             ignore(Thread.create (fun () ->
                 while signal_stop do
-                    c#log `Info (sprintf "Checking tasks to call");
-                    Thread.delay 10.;
+                    with_lock m (fun () -> task_sweep c);
+                    Thread.delay !task_poll_period;
                 done;
                 c#log `Debug "Terminating task thread"
             ) ())
