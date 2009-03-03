@@ -32,8 +32,6 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
 
 let start() =
 
-  (* XXX hook this into the netplex cfg somehow *)
-  let lifedb_dir = sprintf "%s/Documents/LifeDB" (Sys.getenv "HOME") in
   let (opt_list, cmdline_cfg) = Netplex_main.args() in
 
   Arg.parse
@@ -60,13 +58,12 @@ let start() =
   Random.self_init ();
   
   let session_factory = Lifedb_session.singleton () in
-  let sql_mirror_factory = Sql_mirror.singleton lifedb_dir in
   let task_factory = Lifedb_tasks.singleton () in
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory; session_factory; task_factory; sql_mirror_factory ] 
+    [ nethttpd_factory; session_factory; task_factory ]
   cmdline_cfg
 
 let _ = 
