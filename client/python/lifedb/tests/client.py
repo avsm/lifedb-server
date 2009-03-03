@@ -94,13 +94,22 @@ class TasksTestCase(BaseTestCase):
         self.destroy_and_check('foo')
         self.server.logout()
 
+    def test_task_get(self):
+        self.doLogin()
+        self.server.task_create("xxx","single", "sleep 10000")
+        task = self.server.task_get("xxx")
+        print task
+        self.assertEquals(task['cmd'], 'sleep 10000')
+        self.destroy_and_check('xxx')
+        self.server.logout()
+
     def test_task_create_invalid(self):
         self.doLogin()
         self.assertRaises(client.ServerError, self.server.task_create, 
             'invalid', 'xxx', 'echo whatever')
         self.server.logout()
         
-    def test_task_overload(self):
+    def long_test_task_overload(self):
         max_tasks = 10
         self.doLogin()
         for t in range(max_tasks):

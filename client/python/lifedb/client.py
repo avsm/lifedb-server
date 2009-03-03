@@ -130,7 +130,11 @@ class Server(object):
         return data
 
     def task_list(self):
-        resp, data = self.resource.get(path="/task_list")
+        resp, data = self.resource.get(path=uri("/task/_all"))
+        return data
+
+    def task_get(self, name):
+        resp, data = self.resource.get(path=uri("/task/", name))
         return data
 
     def session(self):

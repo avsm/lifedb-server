@@ -116,6 +116,15 @@ let dispatch cgi = function
            end
        )
    end
+   |`Get name -> begin
+       with_lock m (fun () ->
+           match find_task name with
+           |Some state ->
+               cgi#output#output_string (Json_io.string_of_json (json_of_rpc_task (json_of_task state)))
+           |None ->
+               Lifedb_rpc.return_error cgi `Not_found "Task error" "Task not found"
+       )
+   end
    |`List -> begin
        with_lock m (fun () ->
            let resp = Hashtbl.create 1 in
