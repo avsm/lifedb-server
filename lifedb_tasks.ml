@@ -121,7 +121,7 @@ let reschedule_task c name task =
 
 let task_sweep c =
     Hashtbl.iter (fun name task ->
-       let td = Fork_helper.string_of_task task.running in
+       let td = string_of_task task in
        match Fork_helper.status_of_task task.running with
        |Fork_helper.Running pid ->
            c#log `Debug (sprintf "sweep: %s" td)
