@@ -28,13 +28,12 @@ let status_of_task t = !(t.status)
 
 let blank_task () = { thread=None; status=(ref Not_started) }
 
-let fork_and_connect_fds cmd =
+let fork_and_connect_fds args =
    let pin_r, pin_w = pipe () in
    let pout_r, pout_w = pipe () in
    let perr_r, perr_w = pipe () in 
    match fork () with
    |0 -> (* child process *)
-       let args = Array.of_list (Str.split (Str.regexp_string " ") cmd) in
        let dup2_and_close f1 f2 = dup2 f1 f2; close f1 in
        close pin_w;
        dup2_and_close pin_r stdin;
@@ -47,8 +46,8 @@ let fork_and_connect_fds cmd =
        List.iter close [pin_r; pout_w; perr_w];
        pid, pin_w, pout_r, perr_r
 
-let fork_and_read cmd status outfn errfn =
-   let pid, stdin, stdout, stderr = fork_and_connect_fds cmd in
+let fork_and_read args status outfn errfn =
+   let pid, stdin, stdout, stderr = fork_and_connect_fds args in
    status := Running pid;
    close stdin;
    let buflen = 1024 in
@@ -84,8 +83,9 @@ let fork_and_read cmd status outfn errfn =
    |_,Unix.WSTOPPED _ -> ()
 
 let create cmd outfn errfn =
+   let args = [| "sh"; "-c"; cmd |] in
    let status = ref Not_started in
-   let t = Thread.create (fork_and_read cmd status outfn) errfn in
+   let t = Thread.create (fork_and_read args status outfn) errfn in
    { status = status; thread = Some t }
 
 let destroy t =

@@ -11,6 +11,7 @@ import os
 import unittest
 import StringIO
 import time
+import tempfile
 
 from lifedb import client
 
@@ -78,14 +79,23 @@ class TasksTestCase(BaseTestCase):
     def long_test_task_periodic_create(self):
         self.doLogin()
         period=3
-        self.server.task_create("bar","periodic","echo ppp",period=period)
+        tmp = tempfile.NamedTemporaryFile()
+        cmd="echo foo >> %s" % tmp.name
+        self.server.task_create("bar","periodic",cmd,period=period)
+        self.server.task_create("bar2","periodic","echo hello",period=1)
         tasks = self.server.task_list()
         self.assert_('bar' in tasks)
         self.assertEquals(tasks['bar']['mode'], 'periodic')
-        self.assertEquals(tasks['bar']['cmd'], 'echo ppp')
+        self.assertEquals(tasks['bar']['cmd'], cmd)
         self.assertEquals(tasks['bar']['period'], period)
         time.sleep(period*4+1)
         self.destroy_and_check("bar")
+        self.destroy_and_check("bar2")
+        f = open(tmp.name, 'r')
+        lines = map(str.strip, f.readlines())
+        f.close()
+        tmp.close()
+        self.assertEquals(lines,['foo','foo','foo','foo'])
         self.server.logout()
 
     def test_task_constant_create(self):
