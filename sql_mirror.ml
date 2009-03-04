@@ -15,9 +15,6 @@ type json lifeentry = {
     ?text: string option
 } and addr = (string * string) assoc
 
-(* read next directory in an open dir_handle *)
-external read_next_dir : Unix.dir_handle -> string = "unix_read_next_dir"
-
 open Unix
 open Printf
 open Utils
@@ -299,22 +296,21 @@ let do_mirror lifedb_path db =
 let dispatch cgi args =
   ()
 
-let singleton path =
+let singleton () =
     let hooks = object
         inherit Netplex_kit.empty_processor_hooks() as super
 
         val mutable signal_stop = true
         val mutable loop_delay_time = 10.
-        val mutable lifedb_path = path
 
         method post_start_hook c =
             super#post_start_hook c;
-            let dbname = Filename.concat lifedb_path "life.db" in
+            let dbname = Filename.concat (Lifedb_config.Dir.lifedb ()) "life.db" in
             let db = init_db dbname in
             ignore(Thread.create (fun () ->
                 while signal_stop do
                     c#log `Info (sprintf "Initiating a sync");
-                    do_mirror lifedb_path db;
+                    (* do_mirror lifedb_path db; *)
                     Thread.delay loop_delay_time;
                 done;
                 c#log `Debug "Terminating session cleanup thread"

@@ -21,6 +21,11 @@ let with_lock m fn =
         raise e
 
 
+let current_datetime () =
+    let tm = Unix.gmtime (Unix.gettimeofday ()) in
+    Printf.sprintf "%.4d/%.2d/%.2d %.2d:%.2d:%.2d" (1900+tm.Unix.tm_year) tm.Unix.tm_mon
+        tm.Unix.tm_mday tm.Unix.tm_hour tm.Unix.tm_min tm.Unix.tm_sec
+
 (* read next directory in an open dir_handle *)
 external read_next_dir : Unix.dir_handle -> string = "unix_read_next_dir"
 

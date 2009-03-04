@@ -10,7 +10,7 @@ type json plugin_info = <
    ?period : int option
 >
 
-let plugin_info_file = "lifedb_plugin.json"
+let plugin_info_file = "LIFEDB_PLUGIN"
 
 let m = Mutex.create ()
 let c = Condition.create ()

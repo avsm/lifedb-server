@@ -39,6 +39,8 @@ type task_state = {
    mode: task_mode;
    cwd: string;
    start_time: float; 
+   outfd: Unix.file_descr option;
+   errfd: Unix.file_descr option;
    running: Fork_helper.task;
 }
 
@@ -79,16 +81,29 @@ let find_task name =
     with
        Not_found -> None
 
-let run_command cmd cwd =
-    let outfn = print_endline in 
-    let errfn = print_endline in
-    let env = [| sprintf "LIFEDB_DIR=\"%s\"" (Lifedb_config.Dir.lifedb()); 
-      sprintf "LIFEDB_CACHE_DIR=\"%s\"" (Lifedb_config.Dir.cache()) |] in
-    Fork_helper.create cmd env cwd outfn errfn
+let run_command name cmd cwd =
+    print_endline (sprintf "run_command: %s [%s] cwd=%s" name cmd cwd);
+    let logdir = Lifedb_config.Dir.log() in
+    let logfile = sprintf "%s/%s.log" logdir name in
+    let errlogfile = sprintf "%s/%s.err" logdir name in
+    let openfdfn f = Unix.handle_unix_error (Unix.openfile f [ Unix.O_APPEND; Unix.O_CREAT; Unix.O_WRONLY]) 0o600 in
+    let outfd = openfdfn logfile in
+    let errfd = openfdfn errlogfile in
+    let logfn fd s = ignore(Unix.write fd s 0 (String.length s)) in
+    let tmstr = current_datetime () in
+    logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
+    logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
+    let env = [| sprintf "LIFEDB_DIR=%s" (Lifedb_config.Dir.lifedb()); 
+      (sprintf "LIFEDB_CACHE_DIR=%s" (Lifedb_config.Dir.cache()));
+      (sprintf "HOME=%s" (Sys.getenv "HOME")) |] in
+    let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
+    task, (Some outfd), (Some errfd)
 
 let create_task params =
     if Hashtbl.length task_list >= task_table_limit then
        raise (Task_error "too many tasks already registered");
+    if String.contains params#name '.' || (String.contains params#name '/') then
+       raise (Task_error "task name cant contain . or /");
     let mode = match String.lowercase params#mode, params#period with
     |"periodic", (Some p) -> Periodic p
     |"single",_ -> Single
@@ -96,9 +111,9 @@ let create_task params =
     |_,_ -> raise (Task_error "unknown task mode") in
     let cwd = match params#cwd with
     |Some c -> c  |None -> "/" in
-    let task_status = run_command params#cmd cwd in
+    let task_status, outfd, errfd = run_command params#name params#cmd cwd in
     let now_time = Unix.gettimeofday () in
-    let task = { cmd=params#cmd; mode=mode; cwd=cwd; start_time=now_time; running=task_status } in
+    let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; start_time=now_time; running=task_status } in
     Hashtbl.add task_list params#name task;
     printf "Added task: %s\n" (string_of_task task)
 
@@ -107,11 +122,28 @@ let find_or_create_task params =
     |Some _ -> ()
     |None -> create_task params
 
+(* remove the task entry from the hashtable and close
+   any logging fds *)
+let delete_task name =
+    let closeopt task = function
+    |None -> ()
+    |Some fd ->
+      let lg = sprintf "[%s] Log closing: %s\n" (current_datetime()) (Fork_helper.string_of_task task.running) in
+      ignore(Unix.handle_unix_error (Unix.write fd lg 0) (String.length lg));
+      Unix.handle_unix_error Unix.close fd;
+    in
+    match find_task name with
+    |Some task -> 
+        closeopt task task.outfd;
+        closeopt task task.errfd;
+        Hashtbl.remove task_list name
+    |None -> ()
+
 let destroy_task name =
     match find_task name with
     |Some task -> begin
         let final_status = Fork_helper.destroy task.running in
-        Hashtbl.remove task_list name;
+        delete_task name;
         Netplex_cenv.logf `Info "Task %s destroyed: %s" name 
             (Fork_helper.string_of_status final_status);
     end
@@ -122,14 +154,14 @@ let reschedule_task c name task =
     |Single -> ()
     |Constant ->
          c#log `Debug (sprintf "restarting %s (constant)" name);
-         let task_status = run_command task.cmd task.cwd in
+         let task_status, outfd, errfd = run_command name task.cmd task.cwd in
          let now_time = Unix.gettimeofday () in
-         let task = { cmd=task.cmd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
+         let task = { cmd=task.cmd; outfd=outfd; errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
          Hashtbl.add task_list name task
     |Periodic p ->
          let start_time = Unix.gettimeofday () +. (float p) in
          let task_status = Fork_helper.blank_task () in
-         let task = { cmd=task.cmd; mode=Periodic p; cwd=task.cwd; start_time=start_time; running=task_status } in
+         let task = { cmd=task.cmd; mode=Periodic p; outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
          Hashtbl.add task_list name task;
          c#log`Debug (sprintf "scheduling %s: %s" name (Fork_helper.string_of_task task_status))
 
@@ -142,17 +174,17 @@ let task_sweep c =
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
-               let task_status = run_command task.cmd task.cwd in
-               let task = { task with start_time=curtime; running=task_status } in
+               let task_status, outfd, errfd = run_command name task.cmd task.cwd in
+               let task = { task with outfd=outfd; errfd=errfd; start_time=curtime; running=task_status } in
                Hashtbl.replace task_list name task
            end
        |Fork_helper.Done exit_code ->
            c#log `Debug (sprintf "sweep: finished %s" td);
-           Hashtbl.remove task_list name;
+           delete_task name;
            reschedule_task c name task;
        |Fork_helper.Killed signal ->
            c#log `Debug (sprintf "sweep: crashed %s" td);
-           Hashtbl.remove task_list name;
+           delete_task name;
            reschedule_task c name task;
     ) task_list
 
