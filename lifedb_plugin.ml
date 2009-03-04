@@ -7,7 +7,14 @@ type json plugin_info = <
    name : string;
    cmd : string;
    mode : string;
-   ?period : int option
+   ?period : int option;
+   declares: plugin_decl list
+>
+and plugin_decl = <
+   pltype : string;
+   description : string;
+   implements : string list;
+   ?icon : string option
 >
 
 let plugin_info_file = "LIFEDB_PLUGIN"
@@ -27,7 +34,11 @@ let kick_scan_thread () =
 
 let scan_plugin_dir plugin_dir plugin_info_file =
     let info = plugin_info_of_json (Json_io.load_json plugin_info_file) in
-    printf "mode=%s cmd=%s\n%!" info#mode info#cmd;
+    printf "pl=%s mode=%s cmd=%s\n%!" plugin_dir info#mode info#cmd;
+    List.iter (fun decl ->
+        printf "pltype: %s   descr: %s\nimplements: %s\n%!" decl#pltype decl#description 
+          (String.concat ", " decl#implements);
+    ) info#declares;
     let task = object method name=info#name method cmd=info#cmd method mode=info#mode
         method period=info#period method cwd=Some plugin_dir end in
     with_lock Lifedb_tasks.m (fun () -> Lifedb_tasks.find_or_create_task task)
