@@ -4,7 +4,8 @@ type json config = <
     lifedb_directory: string;
     plugins_directory: string list;
     log_directory: string;
-    cache_directory: string
+    cache_directory: string;
+    test_mode: bool
 >
 
 module Dir = struct
@@ -19,6 +20,9 @@ module Dir = struct
     let plugins () = !plugins_dir
 end
 
+let test_mode_val = ref false
+let test_mode () = !test_mode_val
+
 let read_config file =
     let json = Json_io.load_json file in
     let conf = config_of_json json in
@@ -26,4 +30,5 @@ let read_config file =
     Dir.lifedb_dir := subst conf#lifedb_directory;
     Dir.plugins_dir := List.map subst conf#plugins_directory;
     Dir.log_dir := subst conf#log_directory;
-    Dir.cache_dir := subst conf#cache_directory
+    Dir.cache_dir := subst conf#cache_directory;
+    test_mode_val := conf#test_mode

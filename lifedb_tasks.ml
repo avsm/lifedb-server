@@ -97,6 +97,7 @@ let run_command name cmd cwd =
       (sprintf "LIFEDB_CACHE_DIR=%s" (Lifedb_config.Dir.cache()));
       (sprintf "HOME=%s" (Sys.getenv "HOME"));
       (sprintf "USER=%s" (Sys.getenv "USER")) |] in
+    let cmd = if Lifedb_config.test_mode () then "sleep 5" else cmd in
     let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
     task, (Some outfd), (Some errfd)
 
