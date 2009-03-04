@@ -28,7 +28,7 @@ let status_of_task t = !(t.status)
 
 let blank_task () = { thread=None; status=(ref Not_started) }
 
-let fork_and_connect_fds args =
+let fork_and_connect_fds args env cwd =
    let pin_r, pin_w = pipe () in
    let pout_r, pout_w = pipe () in
    let perr_r, perr_w = pipe () in 
@@ -41,13 +41,14 @@ let fork_and_connect_fds args =
        dup2_and_close pout_w stdout;
        close perr_r;
        dup2_and_close perr_w stderr;
-       handle_unix_error (execvp args.(0)) args; 
+       handle_unix_error chdir cwd;
+       handle_unix_error (execvpe args.(0) args) env; 
    |pid -> (* parent process *)
        List.iter close [pin_r; pout_w; perr_w];
        pid, pin_w, pout_r, perr_r
 
-let fork_and_read args status outfn errfn =
-   let pid, stdin, stdout, stderr = fork_and_connect_fds args in
+let fork_and_read args env cwd status outfn errfn =
+   let pid, stdin, stdout, stderr = fork_and_connect_fds args env cwd in
    status := Running pid;
    close stdin;
    let buflen = 1024 in
@@ -82,10 +83,10 @@ let fork_and_read args status outfn errfn =
    |_,Unix.WSIGNALED signal -> status := Killed signal
    |_,Unix.WSTOPPED _ -> ()
 
-let create cmd outfn errfn =
-   let args = [| "sh"; "-c"; cmd |] in
+let create cmd env cwd outfn errfn =
+   let args = [| "/bin/sh"; "-c"; cmd |] in
    let status = ref Not_started in
-   let t = Thread.create (fork_and_read args status outfn) errfn in
+   let t = Thread.create (fork_and_read args env cwd status outfn) errfn in
    { status = status; thread = Some t }
 
 let destroy t =
