@@ -42,6 +42,9 @@ let dispatch (cgi : Netcgi.cgi_activation) =
             end
             |(`HEAD|`GET), "ping" ->
                 cgi#output#output_string "pong";
+            |`POST, "scan" ->
+               let arg = mark_post_rpc cgi in
+               Lifedb_plugin.dispatch cgi arg
             |`POST, "mirror" -> begin
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg

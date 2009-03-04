@@ -1,5 +1,8 @@
 open Netcgi1_compat.Netcgi_types
 open Printf
+open Utils
+
+module LD = Lifedb_config.Dir
 
 let process2 (cgi : Netcgi.cgi_activation) =
   try
@@ -29,11 +32,12 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
   let cgi' = Netcgi1_compat.Netcgi_types.of_compat_activation cgi in
   process2 cgi'
 
-
 let start() =
+  Lifedb_config.read_config "config.json";
+  printf "LifeDB dir: %s\n Plugins dir:%s\n Log dir:%s\nCache dir:%s\n%!" 
+    (LD.lifedb()) (String.concat "|" (LD.plugins())) (LD.log()) (LD.cache());
+  List.iter make_dirs ((LD.lifedb()) :: (LD.log()) :: (LD.cache()) :: (LD.plugins()) );
 
-  (* XXX hook this into the netplex cfg somehow *)
-  let lifedb_dir = sprintf "%s/Documents/LifeDB" (Sys.getenv "HOME") in
   let (opt_list, cmdline_cfg) = Netplex_main.args() in
 
   Arg.parse
@@ -60,8 +64,9 @@ let start() =
   Random.self_init ();
   
   let session_factory = Lifedb_session.singleton () in
-  let sql_mirror_factory = Sql_mirror.singleton lifedb_dir in
+  let sql_mirror_factory = Sql_mirror.singleton () in
   let task_factory = Lifedb_tasks.singleton () in
+  Lifedb_plugin.start ();
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)

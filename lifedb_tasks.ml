@@ -13,6 +13,7 @@ type json rpc_task_create = <
    name: string;
    cmd: string;
    mode: string;
+   ?cwd: string option;
    ?period: int option
 >
 
@@ -36,6 +37,7 @@ type task_mode =
 type task_state = {
    cmd: string;
    mode: task_mode;
+   cwd: string;
    start_time: float; 
    running: Fork_helper.task;
 }
@@ -77,6 +79,13 @@ let find_task name =
     with
        Not_found -> None
 
+let run_command cmd cwd =
+    let outfn = print_endline in 
+    let errfn = print_endline in
+    let env = [| sprintf "LIFEDB_DIR=\"%s\"" (Lifedb_config.Dir.lifedb()); 
+      sprintf "LIFEDB_CACHE_DIR=\"%s\"" (Lifedb_config.Dir.cache()) |] in
+    Fork_helper.create cmd env cwd outfn errfn
+
 let create_task params =
     if Hashtbl.length task_list >= task_table_limit then
        raise (Task_error "too many tasks already registered");
@@ -85,13 +94,18 @@ let create_task params =
     |"single",_ -> Single
     |"constant",_ -> Constant
     |_,_ -> raise (Task_error "unknown task mode") in
-    let outfn = print_endline in
-    let errfn = print_endline in
-    let task_status = Fork_helper.create params#cmd outfn errfn in
+    let cwd = match params#cwd with
+    |Some c -> c  |None -> "/" in
+    let task_status = run_command params#cmd cwd in
     let now_time = Unix.gettimeofday () in
-    let task = { cmd=params#cmd; mode=mode; start_time=now_time; running=task_status } in
+    let task = { cmd=params#cmd; mode=mode; cwd=cwd; start_time=now_time; running=task_status } in
     Hashtbl.add task_list params#name task;
-    Netplex_cenv.logf `Debug "Added task: %s" (string_of_task task)
+    printf "Added task: %s\n" (string_of_task task)
+
+let find_or_create_task params =
+    match find_task params#name with
+    |Some _ -> ()
+    |None -> create_task params
 
 let destroy_task name =
     match find_task name with
@@ -108,14 +122,14 @@ let reschedule_task c name task =
     |Single -> ()
     |Constant ->
          c#log `Debug (sprintf "restarting %s (constant)" name);
-         let task_status = Fork_helper.create task.cmd print_endline print_endline in
+         let task_status = run_command task.cmd task.cwd in
          let now_time = Unix.gettimeofday () in
-         let task = { cmd=task.cmd; mode=Constant; start_time=now_time; running=task_status } in
+         let task = { cmd=task.cmd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
          Hashtbl.add task_list name task
     |Periodic p ->
          let start_time = Unix.gettimeofday () +. (float p) in
          let task_status = Fork_helper.blank_task () in
-         let task = { cmd=task.cmd; mode=Periodic p; start_time=start_time; running=task_status } in
+         let task = { cmd=task.cmd; mode=Periodic p; cwd=task.cwd; start_time=start_time; running=task_status } in
          Hashtbl.add task_list name task;
          c#log`Debug (sprintf "scheduling %s: %s" name (Fork_helper.string_of_task task_status))
 
@@ -128,7 +142,7 @@ let task_sweep c =
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
-               let task_status = Fork_helper.create task.cmd print_endline print_endline in
+               let task_status = run_command task.cmd task.cwd in
                let task = { task with start_time=curtime; running=task_status } in
                Hashtbl.replace task_list name task
            end
