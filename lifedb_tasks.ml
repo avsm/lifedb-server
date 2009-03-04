@@ -95,7 +95,8 @@ let run_command name cmd cwd =
     logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
     let env = [| sprintf "LIFEDB_DIR=%s" (Lifedb_config.Dir.lifedb()); 
       (sprintf "LIFEDB_CACHE_DIR=%s" (Lifedb_config.Dir.cache()));
-      (sprintf "HOME=%s" (Sys.getenv "HOME")) |] in
+      (sprintf "HOME=%s" (Sys.getenv "HOME"));
+      (sprintf "USER=%s" (Sys.getenv "USER")) |] in
     let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
     task, (Some outfd), (Some errfd)
 
