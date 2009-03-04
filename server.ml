@@ -64,14 +64,14 @@ let start() =
   Random.self_init ();
   
   let session_factory = Lifedb_session.singleton () in
-  let sql_mirror_factory = Sql_mirror.singleton () in
   let task_factory = Lifedb_tasks.singleton () in
   Lifedb_plugin.start ();
+  Sql_mirror.start ();
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory; session_factory; task_factory; sql_mirror_factory ] 
+    [ nethttpd_factory; session_factory; task_factory ] 
   cmdline_cfg
 
 let _ = 

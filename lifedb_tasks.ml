@@ -137,7 +137,8 @@ let delete_task name =
     |Some task -> 
         closeopt task task.outfd;
         closeopt task task.errfd;
-        Hashtbl.remove task_list name
+        Hashtbl.remove task_list name;
+        Sql_mirror.kick_mirror_thread ();
     |None -> ()
 
 let destroy_task name =
