@@ -15,6 +15,7 @@ module Dir = struct
     let plugins_dir = ref []
   
     let lifedb () = !lifedb_dir
+    let lifedb_db () = Filename.concat !lifedb_dir "life.db"
     let cache () = !cache_dir
     let log () = !log_dir
     let plugins () = !plugins_dir

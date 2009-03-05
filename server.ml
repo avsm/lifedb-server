@@ -65,8 +65,8 @@ let start() =
   
   let session_factory = Lifedb_session.singleton () in
   let task_factory = Lifedb_tasks.singleton () in
-  Lifedb_plugin.start ();
-  Sql_mirror.start ();
+  Db_thread.start ();
+  Db_thread_access.push Db_thread_access.Plugins;
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)

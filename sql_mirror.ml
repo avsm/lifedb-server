@@ -293,30 +293,9 @@ let init_db dbname =
 let do_mirror lifedb_path db =
   walk_directory_tree lifedb_path (check_directory db lifedb_path)
 
-let m = Mutex.create ()
-let c = Condition.create ()
-
-let kick_mirror_thread () =
-    with_lock m (fun () -> 
-        print_endline "kick_mirror_thread";
-        Condition.signal c;
-    )
+let do_scan db =
+  let lifedb_path = Lifedb_config.Dir.lifedb () in
+  walk_directory_tree lifedb_path (check_directory db lifedb_path)
 
 let dispatch cgi args =
-  kick_mirror_thread ()
-
-let mirror_thread lifedb_path =
-    print_endline "mirror_thread: start";
-    let dbname = Filename.concat lifedb_path "life.db" in
-    let db = init_db dbname in
-    while true do
-        with_lock m (fun () ->
-            Condition.wait c m;
-            print_endline "mirror_thread: woke up";
-            do_mirror lifedb_path db;
-        )
-    done
-
-let start () = 
-    let _ = Thread.create mirror_thread (Lifedb_config.Dir.lifedb ()) in
-    ()
+  ()

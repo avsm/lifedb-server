@@ -97,7 +97,7 @@ let run_command name cmd cwd =
       (sprintf "LIFEDB_CACHE_DIR=%s" (Lifedb_config.Dir.cache()));
       (sprintf "HOME=%s" (Sys.getenv "HOME"));
       (sprintf "USER=%s" (Sys.getenv "USER")) |] in
-    let cmd = if Lifedb_config.test_mode () then "sleep 5" else cmd in
+    let cmd = if Lifedb_config.test_mode () then sprintf "sleep %d" (Random.int 5 + 3) else cmd in
     let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
     task, (Some outfd), (Some errfd)
 
@@ -139,7 +139,8 @@ let delete_task name =
         closeopt task task.outfd;
         closeopt task task.errfd;
         Hashtbl.remove task_list name;
-        Sql_mirror.kick_mirror_thread ();
+        printf "QUEUE: starting request for lifedb scan\n%!";
+        Db_thread_access.push Db_thread_access.Lifedb
     |None -> ()
 
 let destroy_task name =
