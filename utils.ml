@@ -16,10 +16,10 @@ let with_lock m fn =
         let r = fn () in
         Mutex.unlock m;
         r
-    with e ->
+    with e -> begin
         Mutex.unlock m;
         raise e
-
+   end
 
 let current_datetime () =
     let tm = Unix.gmtime (Unix.gettimeofday ()) in
