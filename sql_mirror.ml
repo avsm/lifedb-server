@@ -123,7 +123,11 @@ let process_lifeentry db rootdir fname =
   end
   |Message ->
     (* handle message JSON *)
-    let mtype = db#lookup_mapping le._type maplabelfn in
+    let mtype_get = db#stmt "mtype_get_id_by_name" "select id from mtype_map where mtype=?" in
+    mtype_get#bind1 (Sqlite3.Data.TEXT le._type);
+    let mtype = match mtype_get#step_once with
+      |0 -> Sqlite3.Data.NULL 
+      |_ -> mtype_get#column 0 in
     let ctime = Sqlite3.Data.INT (Int64.of_float le._timestamp) in
     let from_addr = match le._from with |Some x -> x |None -> failwith "message must have _from" in
     (* take an address hash from the JSON and generate, update or retrieve people records and return the people_id *)
@@ -196,7 +200,7 @@ let process_lifeentry db rootdir fname =
         (* brand new lifedb record *)
         let insstmt = db#stmt "ins_lifedb" "insert into lifedb values(NULL,?,datetime(?,\"unixepoch\"),?,?,?)" in
         let summary = Sqlite3.Data.TEXT (summaryofmsg le) in
-        insstmt#bind [| (Sqlite3.Data.TEXT fname); ctime; (Sqlite3.Data.INT mtype); people_id; summary |];
+        insstmt#bind [| (Sqlite3.Data.TEXT fname); ctime; mtype; people_id; summary |];
         let _ = insstmt#step_once in
         stmt#bind1 (Sqlite3.Data.TEXT fname);
         let _ = stmt#step_once in
@@ -206,7 +210,7 @@ let process_lifeentry db rootdir fname =
         let lifedb_id = stmt#column 0 in
         print_endline "update";
         let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=? where id=?" in
-        stmt#bind4 ctime (Sqlite3.Data.INT mtype) people_id lifedb_id;
+        stmt#bind4 ctime mtype people_id lifedb_id;
         let _ = stmt#step_once in
         people_id
         (* XXX update abrecord in people also *)
@@ -271,8 +275,7 @@ let check_directory db rootdir dir =
   |None ->
      print_endline "*"
 
-let init_db dbname =
-  let db = new Sql_access.db dbname in
+let init_db db =
   db#exec "create table if not exists
        dircache (dir text primary key, mtime integer)";
   db#exec "create table if not exists
@@ -286,15 +289,14 @@ let init_db dbname =
   db#exec "create unique index if not exists contacts_filename on contacts(file_name)";
   db#exec "create table if not exists
        people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
-  db#exec "create unique index if not exists people_svcid on people(service_name, service_id)";
-  db#register_map;
-  db
+  db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
 let do_mirror lifedb_path db =
   walk_directory_tree lifedb_path (check_directory db lifedb_path)
 
 let do_scan db =
   let lifedb_path = Lifedb_config.Dir.lifedb () in
+  init_db db;
   walk_directory_tree lifedb_path (check_directory db lifedb_path)
 
 let dispatch cgi args =

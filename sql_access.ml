@@ -75,7 +75,6 @@ end
 class db fname =
     let db = db_open fname in
     let stmts = Hashtbl.create 1 in
-    let maps  = Hashtbl.create 1 in 
 
     object(self)
 
@@ -96,38 +95,11 @@ class db fname =
         self#exec "begin";
         try
             let () = fn () in
-            self#exec "end"
+            self#exec "commit transaction"
         with e -> begin
             print_endline "EXCEPTION IN TRANSACTION!";
             self#exec "rollback";
             raise e
         end
 
-    method register_map = 
-        let uid = "lifedb_mtype_map" in
-        self#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, label text)";
-        let string_get_stmt = self#stmt (uid^"_get") "select id from mtype_map where mtype=?" in
-        let string_put_stmt = self#stmt (uid^"_put") "insert into mtype_map values(NULL,?,?)" in
-        let c : (string,int64) Hashtbl.t = Hashtbl.create 1 in
-        Hashtbl.add maps "mtype" (c,string_get_stmt,string_put_stmt)
-
-    method lookup_mapping (key:string) labelfn =
-        let c,string_get_stmt,string_put_stmt = Hashtbl.find maps "mtype" in
-        try
-           Hashtbl.find c key
-        with Not_found -> begin
-            string_get_stmt#bind1 (Data.TEXT key);
-            match string_get_stmt#step_once with
-            |0 ->
-               string_put_stmt#bind2 (Data.TEXT key) (Data.TEXT (labelfn key));
-               let _ = string_put_stmt#step_once in
-               self#lookup_mapping key labelfn
-            |_ ->
-               let res = match string_get_stmt#column 0 with
-               |Data.INT i -> i
-               |x -> Int64.of_string (Data.to_string x) in
-               Hashtbl.add c key res;
-               res
-        end
-       
 end
