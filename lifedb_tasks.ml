@@ -46,7 +46,7 @@ type task_state = {
 
 let task_list = Hashtbl.create 1
 let task_table_limit = 10
-let task_poll_period = ref 1.
+let task_poll_period = ref 120.
 
 let json_of_task t =
    let mode,period = match t.mode with
@@ -238,6 +238,8 @@ let singleton () =
 
         method post_start_hook c =
             super#post_start_hook c;
+            if Lifedb_config.test_mode () then
+                task_poll_period := 2.;
             ignore(Thread.create (fun () ->
                 while signal_stop do
                     with_lock m (fun () -> task_sweep c);
