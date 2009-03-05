@@ -19,6 +19,11 @@ open Unix
 open Printf
 open Utils
 
+type mtype = {
+    m_id: Sqlite3.Data.t;
+    m_implements: string;
+}
+
 let walk_directory_tree dir walkfn =
   let rec walk dir =
     walkfn dir;
@@ -34,17 +39,9 @@ let walk_directory_tree dir walkfn =
 
 type le_type = |Contact |Message
 let lifedb_entry_type = function
-  |"com.clinklabs.contact" -> Contact
-  |_ -> Message
-
-let maplabelfn = function
-  |"com.clinklabs.email" -> "Email"
-  |"com.apple.iphone.sms" -> "SMS"
-  |"com.apple.iphone.call" -> "Phone Call"
-  |"com.skype" -> "Skype"
-  |"com.twitter" -> "Twitter"
-  |"com.adium" -> "Instant Messaging"
-  |x -> x
+  |"public.contact" -> Contact
+  |"public.message" -> Message
+  |x -> failwith (sprintf "unknown implementation type %s" x)
 
 let summarykey js = 
   let sopt = function
@@ -64,10 +61,22 @@ let summaryofmsg js : string =
   |None -> "<none>"
   |Some x -> if String.length x > 50 then String.sub x 0 50 ^ "..." else x
 
-let process_lifeentry db rootdir fname = 
+let get_all_mtypes db =
+  let h = Hashtbl.create 1 in
+  let stmt = db#stmt "all_mtypes" "select id,mtype,implements from mtype_map" in
+  stmt#step_all (fun () ->
+      let m = { m_id=stmt#column 0; m_implements=(Sqlite3.Data.to_string (stmt#column 2)) } in
+      Hashtbl.add h (Sqlite3.Data.to_string (stmt#column 1)) m
+  );
+  h
+
+let process_lifeentry db mtypes rootdir fname = 
   let json = Json_io.load_json ~big_int_mode:true fname in
   let le = lifeentry_of_json json in
-  match lifedb_entry_type le._type with
+  let mtype_info = try 
+      Hashtbl.find mtypes le._type
+    with Not_found -> failwith (sprintf "unknown mtype %s" le._type) in
+  match lifedb_entry_type mtype_info.m_implements with
   |Contact -> begin
     (* Message is a contact *)
     let stmt = db#stmt "contactsel" "select id from contacts where uid=?" in
@@ -96,8 +105,7 @@ let process_lifeentry db rootdir fname =
        let _ = stmt#step_once in rowid
     in
     (* insert the various services in this contact into people fields *)
-    begin
-    match le._services with
+    let () = match le._services with
     |None -> ()
     |Some h ->
        Hashtbl.iter (fun service_name service_ids ->
@@ -119,77 +127,29 @@ let process_lifeentry db rootdir fname =
               let _ = stmt#step_once in ()
           ) service_ids
         ) h
-    end
+     in ()
   end
   |Message ->
     (* handle message JSON *)
-    let mtype_get = db#stmt "mtype_get_id_by_name" "select id from mtype_map where mtype=?" in
-    mtype_get#bind1 (Sqlite3.Data.TEXT le._type);
-    let mtype = match mtype_get#step_once with
-      |0 -> Sqlite3.Data.NULL 
-      |_ -> mtype_get#column 0 in
+    let mtype = mtype_info.m_id in
     let ctime = Sqlite3.Data.INT (Int64.of_float le._timestamp) in
     let from_addr = match le._from with |Some x -> x |None -> failwith "message must have _from" in
     (* take an address hash from the JSON and generate, update or retrieve people records and return the people_id *)
-    (* cases for the addr handling:
-       - brand new person record for (svcname,svcid)
-       -- no contact_id from the db in this case, but could use the one in the file (A)
-       -- no contact_id in the file, so leave it NULL (B)
-       - existing person record for (svcname,svcid) (C)
-       -- if existing contact_id is NULL, set it to the one in the file (D)
-       -- if existing contact_id is not null and file is null, change the file (E)
-       -- if existing contact_id is not null, and file is not null: (F)
-       --- if they are different, signal a conflict (G)
-       --- if they are the same, just continue  (H)
-    *)
     let process_addr addr =
-       (* does this contact "uid" field exist in the database? resolve into a contact_id integer or NULL *)
-       let contact_id_in_file = try
-           let uid = Sqlite3.Data.TEXT (List.assoc "uid" addr) in
-           let contstmt = db#stmt "contidsel" "select id from contacts where uid=?" in
-           contstmt#bind1 uid;
-           match contstmt#step_once with
-           |0 -> Sqlite3.Data.NULL
-           |_ -> contstmt#column 0
-         with Not_found -> Sqlite3.Data.NULL in
        let service_name = try Sqlite3.Data.TEXT (String.lowercase (List.assoc "type" addr)) with Not_found -> failwith "must have type field in addr" in
        let service_id = try Sqlite3.Data.TEXT (String.lowercase (List.assoc "id" addr)) with Not_found -> failwith "must have id field in addr" in
-       let stmt = db#stmt "peoplesel" "select id,contact_id from people where service_name=? and service_id=?" in
+       let stmt = db#stmt "peoplesel" "select id from people where service_name=? and service_id=?" in
        stmt#bind2 service_name service_id;
        match stmt#step_once with
        |0 -> begin
-          (* case (A)/(B) from comment above, just use contact_uid_in_file since its a new record *)
-          let insstmt = db#stmt "peopleinsnullcid" "insert into people values(NULL,?,?,?)" in
-          insstmt#bind3 service_name service_id contact_id_in_file; 
+          let insstmt = db#stmt "peopleinsnullcid" "insert into people values(NULL,?,?,NULL)" in
+          insstmt#bind2 service_name service_id; 
           let _ = insstmt#step_once in
           stmt#bind2 service_name service_id;
           let _ = stmt#step_once in
           stmt#column 0
        end
-       |_ -> begin
-          (* case (C) from comment above, there is an existing record *)
-          let people_id = stmt#column 0 in
-          let contact_id_in_db = stmt#column 1 in
-          let () = match contact_id_in_db, contact_id_in_file with
-          |Sqlite3.Data.NULL,Sqlite3.Data.NULL ->
-             (*  print_endline "NULL,NULL"; *)
-              () (* case (D) in comment above, but noop*)
-          |Sqlite3.Data.INT contact_id_in_db, Sqlite3.Data.NULL -> 
-              (* case (E) in comment above, update file *)
-             (*  print_endline (sprintf "CHANGE FILE: fname=%s dbid=%Ld" fname contact_id_in_db); *)
-              ()
-          |Sqlite3.Data.INT contact_id_in_db, Sqlite3.Data.INT contact_id_in_file ->
-              (* case (F) in comment above, check they are the same *)
-              if contact_id_in_db = contact_id_in_file then begin
-                (* print_endline (sprintf "EQ %Ld" contact_id_in_db); *)
-                () (* no action, case (H) above *)
-              end else begin
-                 print_endline "CONFLICT!!!!"
-              end
-          |_ -> failwith "unexpected rets in contact ids"
-          in
-          people_id
-       end
+       |_ -> stmt#column 0
     in
     (* check if this lifedb entry already exists *)
     let stmt = db#stmt "get_lifedb" "select id from lifedb where filename=?" in
@@ -226,7 +186,7 @@ let process_lifeentry db rootdir fname =
       ) addrs 
     |None -> ()
 
-let process_directory db rootdir dir =
+let process_directory db mtypes rootdir dir =
   let dh = opendir dir in
   let counter = ref 0 in
   begin
@@ -237,7 +197,7 @@ let process_directory db rootdir dir =
      if Filename.check_suffix h ".lifeentry" then begin
         let fname = sprintf "%s/%s" dir h in
         try
-           process_lifeentry db rootdir fname
+           process_lifeentry db mtypes rootdir fname
         with
            e -> print_endline (sprintf "exception in handling %s: %s" fname (Printexc.to_string e))
      end
@@ -263,12 +223,12 @@ let dir_is_updated db dir mtime =
   stmt#bind [| (Sqlite3.Data.TEXT dir); (Sqlite3.Data.INT mtime) |];
   let _ = stmt#step_once in ()
 
-let check_directory db rootdir dir = 
+let check_directory db mtypes rootdir dir = 
   printf "%s ...%!" dir;
   match dir_needs_update db dir with
   |Some old_mtime  ->
      db#transaction (fun () ->
-         process_directory db rootdir dir;
+         process_directory db mtypes rootdir dir;
          dir_is_updated db dir old_mtime;
      );
      print_endline "o"
@@ -291,13 +251,11 @@ let init_db db =
        people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
   db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
-let do_mirror lifedb_path db =
-  walk_directory_tree lifedb_path (check_directory db lifedb_path)
-
 let do_scan db =
   let lifedb_path = Lifedb_config.Dir.lifedb () in
   init_db db;
-  walk_directory_tree lifedb_path (check_directory db lifedb_path)
+  let mtypes = get_all_mtypes db in
+  walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path)
 
 let dispatch cgi args =
   ()
