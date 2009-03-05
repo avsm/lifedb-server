@@ -69,6 +69,11 @@ class statement db uid sql = object
         |x -> raise_sql_error x in
         data_count s
 
+    method step_all fn =
+        while db_busy_retry (fun () -> step s) = Rc.ROW do
+           let () = fn () in ()
+        done
+
     method column c = column s c
 end
 
