@@ -68,7 +68,7 @@ let string_of_task t =
     |Single -> "single"
     |Periodic p -> sprintf "periodic (every %d sec)" p
     |Constant -> "constant" in
-    sprintf "%s : %s (%s)" mode t.cmd running
+    sprintf "%s : `%s` %s" mode t.cmd running
 
 let log_task_table () = 
     Netplex_cenv.log `Info "logging task table...";
