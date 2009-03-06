@@ -26,7 +26,5 @@ let update db params =
            let id = gets#column 0 in
            print_endline (sprintf "id=%s" (Data.to_string id));
            upds#bind [| descr; icon; implements; id |];
-           print_endline "bound upds";
-           let _ = upds#step_once in
-           print_endline "done updas";
-    ) 
+           let _ = upds#step_once in ()
+    )     
