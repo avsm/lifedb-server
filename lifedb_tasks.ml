@@ -47,6 +47,7 @@ type task_state = {
 let task_list = Hashtbl.create 1
 let task_table_limit = 10
 let task_poll_period = ref 120.
+let task_throttle () = Thread.delay 1.
 
 let json_of_task t =
    let mode,period = match t.mode with
@@ -67,7 +68,7 @@ let string_of_task t =
     |Single -> "single"
     |Periodic p -> sprintf "periodic (every %d sec)" p
     |Constant -> "constant" in
-    sprintf "(%s) : %s (%s)" mode t.cmd running
+    sprintf "%s : %s (%s)" mode t.cmd running
 
 let log_task_table () = 
     Netplex_cenv.log `Info "logging task table...";
@@ -82,7 +83,7 @@ let find_task name =
        Not_found -> None
 
 let run_command name cmd cwd =
-    print_endline (sprintf "run_command: %s [%s] cwd=%s" name cmd cwd);
+    Log.logmod "Tasks" "Executing command '%s' (%s)" name cmd;
     let logdir = Lifedb_config.Dir.log() in
     let logfile = sprintf "%s/%s.log" logdir name in
     let errlogfile = sprintf "%s/%s.err" logdir name in
@@ -99,6 +100,7 @@ let run_command name cmd cwd =
       (sprintf "USER=%s" (Sys.getenv "USER")) |] in
     let cmd = if Lifedb_config.test_mode () then sprintf "sleep %d" (Random.int 5 + 3) else cmd in
     let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
+    task_throttle ();
     task, (Some outfd), (Some errfd)
 
 let create_task params =
@@ -117,7 +119,7 @@ let create_task params =
     let now_time = Unix.gettimeofday () in
     let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; start_time=now_time; running=task_status } in
     Hashtbl.add task_list params#name task;
-    printf "Added task: %s\n" (string_of_task task)
+    Log.logmod "Tasks" "Created task '%s' %s" params#name (string_of_task task)
 
 let find_or_create_task params =
     match find_task params#name with

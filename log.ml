@@ -7,6 +7,7 @@ let q = Queue.create ()
 let c = Condition.create ()
 
 type log_request = [
+   |`Module of (string * string)
    |`Debug of string
    |`Plugin of (string * float * int)
 ]
@@ -20,7 +21,10 @@ let push (l:log_request) =
 let log_request db = function
     |`Debug l ->
         let time = current_datetime () in
-        print_endline (sprintf "[%s] %s" time l);
+        print_endline (sprintf "[%s]  %s" time l);
+    |`Module (m,l) ->
+        let time = current_datetime () in
+        print_endline (sprintf "[%s] %.10s: %s" time m l)
     |`Plugin (plugin_name, plugin_time, exit_code) ->
         let time = current_datetime () in
         let stmt = db#stmt "inslog" "insert into task_log values(NULL,?,?,?,?)" in
@@ -46,6 +50,10 @@ let log_thread () =
         ) in
         log_request db l;
     done
+
+let logmod m fmt =
+  let xfn f = push (`Module (m, f)) in
+  kprintf xfn fmt
     
 let init () =
     let _ = Thread.create log_thread () in

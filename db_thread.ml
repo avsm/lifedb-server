@@ -10,10 +10,7 @@ let db_thread () =
     let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db()) in
     while true do
         let task = with_lock m (fun () ->
-            print_endline "db_thread: waiting";
-            dump_q ();
             if Queue.is_empty q then begin
-               print_endline "db_thread: empty q, sleeping";
                Condition.wait c m
             end;
             Queue.take q

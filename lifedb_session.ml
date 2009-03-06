@@ -43,13 +43,12 @@ let expire_sessions () =
     !expired
 
 let register_session () =
-    let cont = Netplex_cenv.self_cont() in
     (* If we have too many sessions, force some expiry *)
     if Hashtbl.length session_table > max_sessions then begin
-       cont#log `Warning "Too many sessions, attempting to expire older ones";
+       Log.logmod "Session" "Too many sessions, attempting to expire older ones";
        ignore(expire_sessions ());
        if Hashtbl.length session_table > max_sessions then begin
-           cont#log `Warning "Unable to expire sessions, so rejecting login request";
+           Log.logmod "Session" "Unable to expire sessions, so rejecting login request";
            raise Too_many_sessions
        end;
     end;
@@ -59,7 +58,7 @@ let register_session () =
         Hashtbl.add session_table session_key
             { last_accessed = current_time }
     );
-    cont#log `Debug (Printf.sprintf "New session: %s" session_key);
+    Log.logmod "Session" "New session: %s" session_key;
     session_key
   
 let destroy_session session =
@@ -103,10 +102,10 @@ let singleton () =
             super#post_start_hook c;
             ignore(Thread.create (fun () ->
                 while signal_stop do
-                    c#log `Info (sprintf "Cleaning up session table");
+                    Log.logmod "Session" "Cleaning up session table";
                     let expired = with_lock m expire_sessions in
                     List.iter (fun (sess, v) ->
-                        c#log `Debug (sprintf "Expired session: %s (%f)" sess v.last_accessed)
+                        Log.logmod "Session" "Expired session: %s (%f)" sess v.last_accessed;
                     ) expired;
                     Thread.delay (session_expiry_time /. 4.);
                 done;
@@ -114,13 +113,11 @@ let singleton () =
             ) ())
             
         method receive_admin_message c msg args =
-            c#log `Info (sprintf "received admin msg %s %s" msg (String.concat "," (Array.to_list args)));
             match msg,args with
             |"session",[|"dump"|] ->
-                c#log `Debug "Dumping session table";
                 with_lock m (fun () ->
                     Hashtbl.iter (fun k v ->
-                        c#log `Debug (sprintf "%s: %f" k v.last_accessed)
+                        Log.logmod "Session" "%s: %f" k v.last_accessed;
                     ) session_table
                 )
             |_ -> ()

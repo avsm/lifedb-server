@@ -20,17 +20,13 @@ let string_of_scan_request = function
     |Lifedb -> "lifedb"
 
 let dump_q () =
-    printf "Queue: [";
+    printf "DB Queue: [";
     Queue.iter (fun i -> printf "%s " (string_of_scan_request i)) q;
     printf "]\n%!"
     
 let push req =
-    printf "QUEUE: push req started: %s\n%!" (string_of_scan_request req);
     let pushit () =
-        print_endline (sprintf "pushing %s to queue" 
-            (string_of_scan_request req));
         Queue.push req q;
-        dump_q();
         Condition.signal c;
     in
     with_lock m (fun () ->
