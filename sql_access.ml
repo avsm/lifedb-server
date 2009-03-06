@@ -60,7 +60,7 @@ class statement db uid sql = object
         db_must_ok (fun () -> bind s 1 arg1);
         db_must_ok (fun () -> bind s 2 arg2);
         db_must_ok (fun () -> bind s 3 arg3);
-        db_must_ok (fun () -> bind s 3 arg4)
+        db_must_ok (fun () -> bind s 4 arg4)
 
     method step_once =
         let () = match db_busy_retry (fun () -> step s) with
