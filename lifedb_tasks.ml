@@ -139,6 +139,9 @@ let delete_task name =
         closeopt task task.outfd;
         closeopt task task.errfd;
         Hashtbl.remove task_list name;
+        let time_taken = (Unix.gettimeofday ()) -. task.start_time in
+        let exit_code = Fork_helper.exit_code_of_task task.running in
+        Log.push (`Plugin (name, time_taken, exit_code));
         printf "QUEUE: starting request for lifedb scan\n%!";
         Db_thread_access.push Db_thread_access.Lifedb
     |None -> ()

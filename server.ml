@@ -34,6 +34,7 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
 
 let start() =
   Lifedb_config.read_config "config.json";
+  Log.init ();
   printf "LifeDB dir: %s\n Plugins dir:%s\n Log dir:%s\nCache dir:%s\n%!" 
     (LD.lifedb()) (String.concat "|" (LD.plugins())) (LD.log()) (LD.cache());
   List.iter make_dirs ((LD.lifedb()) :: (LD.log()) :: (LD.cache()) :: (LD.plugins()) );
