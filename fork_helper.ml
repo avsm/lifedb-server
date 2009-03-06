@@ -25,6 +25,8 @@ let pid_of_status = function
 let string_of_task t = string_of_status !(t.status)
 let pid_of_task t = pid_of_status !(t.status)
 let status_of_task t = !(t.status)
+let exit_code_of_task t = match !(t.status) with
+    |Done e -> e |_ -> -1
 
 let blank_task () = { thread=None; status=(ref Not_started) }
 
