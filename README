@@ -13,6 +13,7 @@ You will need at least:
  * caml-sqlite3
  * caml-ocamlnet
  * caml-uuidm
+ * caml-ansicolor
 
 Just do "make" in the current directory to build the sources.
 

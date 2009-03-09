@@ -2,6 +2,8 @@ open Utils
 open Sqlite3
 open Printf
 
+module AT=ANSITerminal
+
 let m = Mutex.create ()
 let q = Queue.create ()
 let c = Condition.create ()
@@ -21,10 +23,17 @@ let push (l:log_request) =
 let log_request db = function
     |`Debug l ->
         let time = current_datetime () in
-        print_endline (sprintf "[%s]  %s" time l);
+        AT.printf [AT.Foreground AT.Cyan] "[%s] " time;
+        print_endline l
     |`Module (m,l) ->
         let time = current_datetime () in
-        print_endline (sprintf "[%s] %.10s: %s" time m l)
+        let col_of_module = function
+        |"Tasks" -> AT.Red
+        |"Plugins" -> AT.Yellow
+        |_ -> AT.Magenta in
+        AT.printf [AT.Foreground AT.Cyan] "[%s]" time;
+        AT.printf [AT.Foreground (col_of_module m)] "%.10s: " m;
+        print_endline l
     |`Plugin (plugin_name, plugin_time, exit_code) ->
         let time = current_datetime () in
         let stmt = db#stmt "inslog" "insert into task_log values(NULL,?,?,?,?)" in

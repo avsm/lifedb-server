@@ -19,7 +19,7 @@ SOURCES= custom_unix_stubs.c fork_helper.ml utils.ml lifedb_config.ml sql_access
         server.ml
 THREADS=yes
 RESULT=lifedb_server
-PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3 str
+PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3 str ANSITerminal
 LIBDIRS=/opt/local/lib
 
 PP=./camlp4find $(PACKS)
