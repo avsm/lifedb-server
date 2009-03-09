@@ -1,0 +1,6 @@
+- shift to task configuration instead of plugins spawning tasks
+- add HTTP auth instead of just session
+- expose config.json through the UI
+- hook back graphing via a URL scheme to serve up images and cache them in cache_dir
+
+
