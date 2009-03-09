@@ -1,0 +1,30 @@
+Build
+-----
+
+To build this repository, you will need an up-to-date dports repo
+and the additional local repository available at:
+http://github.com/avsm/darwinports/
+
+Just do "make" in the current directory to build the sources.
+
+Configuration
+-------------
+
+The server gets its base configuration from "config.json" in the build
+directory.
+
+ * lifedb_directory: Root of the user's LifeDB files
+ * plugins_directory: List of directories to search for plugins
+ * log_directory: Directory to drop task logfiles and database to
+ * cache_directory: temporary space to hold cache files from plugins
+ * test_mode: if true, will not actually run commands but do everything else.
+
+Running
+-------
+
+To run the server in the foreground:
+
+# ./lifedb_server -conf netplex.cfg -fg
+
+This is also the "make run" Makefile target.
+
