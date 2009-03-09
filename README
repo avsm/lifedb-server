@@ -5,6 +5,13 @@ To build this repository, you will need an up-to-date dports repo
 and the additional local repository available at:
 http://github.com/avsm/darwinports/
 
+You will need at least:
+
+ * ocaml
+ * caml-json-wheel
+ * caml-json-static
+ * caml-sqlite3
+
 Just do "make" in the current directory to build the sources.
 
 Configuration
