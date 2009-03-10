@@ -10,3 +10,6 @@ val push : log_request -> unit
 val init : unit -> unit
 
 val logmod : string -> ('a, unit, string, unit) format4 -> 'a
+val logdbg : ('a, unit, string, unit) format4 -> 'a
+
+

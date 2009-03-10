@@ -65,6 +65,10 @@ let log_thread () =
 let logmod m fmt =
   let xfn f = push (`Module (m, f)) in
   kprintf xfn fmt
+
+let logdbg fmt =
+  let xfn f = push (`Debug f) in
+  kprintf xfn fmt
     
 let init () =
     let _ = Thread.create log_thread () in
