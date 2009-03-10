@@ -255,7 +255,8 @@ let do_scan db =
   let lifedb_path = Lifedb_config.Dir.lifedb () in
   init_db db;
   let mtypes = get_all_mtypes db in
-  walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path)
+  if not (Lifedb_config.test_mode ()) then
+      walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path)
 
 let dispatch cgi args =
   ()
