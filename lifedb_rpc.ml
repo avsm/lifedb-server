@@ -22,10 +22,11 @@ let return_need_auth (cgi:Netcgi.cgi_activation) =
     cgi#output#rollback_work ();
     Log.logmod "Auth" "Unauthorized request for %s" (cgi#url ());
     cgi#set_header ~status:`Unauthorized ~cache:`No_cache ();
-    Nethttp.Header.set_www_authenticate cgi#environment#output_header ["basic", ["realm", "LifeDB credentials"]]
+    Nethttp.Header.set_www_authenticate cgi#environment#output_header
+        ["basic", ["realm", "LifeDB credentials"]]
 
 let check_passwd username passwd =
-    username = "foo" and passwd = "bar"
+    (username = "foo") && (passwd = "bar")
 
 let check_auth cgi =
     try begin
