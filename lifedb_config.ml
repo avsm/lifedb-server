@@ -4,6 +4,7 @@ open Utils
 
 type json config = <
     lifedb_directory: string;
+    config_directory: string;
     plugins_directory: string list;
     log_directory: string;
     cache_directory: string;
@@ -15,12 +16,14 @@ module Dir = struct
     let cache_dir = ref ""
     let log_dir = ref ""
     let plugins_dir = ref []
-  
+    let config_dir = ref ""
+
     let lifedb () = !lifedb_dir
     let lifedb_db () = Filename.concat !lifedb_dir "life.db"
     let cache () = !cache_dir
     let log () = !log_dir
     let plugins () = !plugins_dir
+    let config () = !config_dir
 end
 
 let test_mode_val = ref false
@@ -37,6 +40,7 @@ let read_config file =
     Dir.plugins_dir := List.map subst conf#plugins_directory;
     Dir.log_dir := subst conf#log_directory;
     Dir.cache_dir := subst conf#cache_directory;
+    Dir.config_dir := subst conf#config_directory;
     test_mode_val := conf#test_mode;
     config_filename_val := realpath file
 
@@ -46,6 +50,7 @@ let string_of_config () =
        method plugins_directory = Dir.plugins ()
        method log_directory = Dir.log ()
        method cache_directory = Dir.cache ()
+       method config_directory = Dir.config ()
        method test_mode = test_mode ()
     end) in
     Json_io.string_of_json json

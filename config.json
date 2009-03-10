@@ -3,5 +3,6 @@
   "plugins_directory" : [ "$HOME/Library/Application Support/LifeDB/Plugins", "$HOME/src/git/clink/lifedb-plugins.git" ],
   "log_directory" : "$HOME/Library/Application Support/LifeDB/Logs",
   "cache_directory" : "$HOME/Library/Caches/LifeDB",
+  "config_directory" : "$HOME/Library/Application Support/LifeDB/Config", 
   "test_mode" : false
 }
