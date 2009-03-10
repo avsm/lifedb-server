@@ -43,7 +43,9 @@ let log_request db = function
             stmt#bind4 (Data.TEXT plugin_name) (dbint (Unix.gettimeofday())) (dbint plugin_time) (Data.INT exit_code);
             let _ = stmt#step_once in ()
         );
-        print_endline (sprintf "PLUGIN %s: [%s] %f seconds, exit code %Ld" plugin_name time plugin_time exit_code)
+        AT.printf [AT.Foreground AT.Cyan] "[%s]" time;
+        AT.printf [AT.Foreground AT.Green] "%.10s: " plugin_name;
+        print_endline (sprintf "%f seconds, exit code %Ld" plugin_time exit_code)
 
 let log_thread () =
     let logdbname = Filename.concat (Lifedb_config.Dir.log ()) "log.db" in
