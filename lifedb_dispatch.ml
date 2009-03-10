@@ -24,6 +24,8 @@ let dispatch (cgi : Netcgi.cgi_activation) =
     |true -> begin
         try 
             match cgi#request_method, url_hd with
+            |(`HEAD|`GET), "config" ->
+               Lifedb_static.serve_config cgi url_list
             |(`HEAD|`GET), "ping" ->
                 cgi#output#output_string "pong";
             |`POST, "scan" ->

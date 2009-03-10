@@ -14,7 +14,7 @@ USE_CAMLP4 := yes
 SOURCES= custom_unix_stubs.c fork_helper.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
 	sql_mtype_map.ml sql_mirror.ml \
 	lifedb_rpc.ml lifedb_session.ml db_thread_access.ml lifedb_tasks.ml lifedb_plugin.ml \
-	db_thread.ml \
+	db_thread.ml lifedb_static.ml \
 	lifedb_dispatch.ml \
         server.ml
 THREADS=yes

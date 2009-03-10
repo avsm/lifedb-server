@@ -1,5 +1,7 @@
 (*pp $PP *)
 
+open Utils
+
 type json config = <
     lifedb_directory: string;
     plugins_directory: string list;
@@ -24,6 +26,9 @@ end
 let test_mode_val = ref false
 let test_mode () = !test_mode_val
 
+let config_filename_val = ref ""
+let config_filename () = !config_filename_val
+
 let read_config file =
     let json = Json_io.load_json file in
     let conf = config_of_json json in
@@ -32,4 +37,15 @@ let read_config file =
     Dir.plugins_dir := List.map subst conf#plugins_directory;
     Dir.log_dir := subst conf#log_directory;
     Dir.cache_dir := subst conf#cache_directory;
-    test_mode_val := conf#test_mode
+    test_mode_val := conf#test_mode;
+    config_filename_val := realpath file
+
+let string_of_config () =
+    let json = json_of_config (object
+       method lifedb_directory = Dir.lifedb ()
+       method plugins_directory = Dir.plugins ()
+       method log_directory = Dir.log ()
+       method cache_directory = Dir.cache ()
+       method test_mode = test_mode ()
+    end) in
+    Json_io.string_of_json json

@@ -44,3 +44,14 @@ Databases
 Log messages and progress are output to stdout and also to <logging_dir>/log.db
 
 The main LifeDB cache is held in <lifedb_dir>/life.db
+
+Useful URLS
+-----------
+
+You must authenticate successfully using HTTP auth before any other actions
+are permitted.
+
+ * /config  : returns the global server configuration as JSON with all 
+   variables fully substituted in.
+
+ 
