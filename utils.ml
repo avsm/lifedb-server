@@ -29,6 +29,9 @@ let current_datetime () =
 (* read next directory in an open dir_handle *)
 external read_next_dir : Unix.dir_handle -> string = "unix_read_next_dir"
 
+(* wrapper for realpath(2) *)
+external realpath : string -> string = "unix_realpath"
+
 exception Unable_to_make_dirs of (string * string)
 
 let make_dirs dir =

@@ -11,6 +11,7 @@
 #include <caml/unixsupport.h>
 
 #include <sys/types.h>
+#include <sys/param.h>
 #include <dirent.h>
 
 typedef struct dirent directory_entry;
@@ -27,4 +28,14 @@ CAMLprim value unix_read_next_dir(value vd)
   } while ( e->d_type != DT_DIR || !strcmp(e->d_name,".") || !strcmp(e->d_name,".." ));
   return copy_string(e->d_name);
 }
+
+CAMLprim value unix_realpath(value path)
+{
+  char buffer[PATH_MAX];
+  char *r;
+  r = realpath(String_val(path), buffer);
+  if (r == NULL) uerror("realpath", path);
+  return copy_string(buffer);
+}
+
 
