@@ -144,7 +144,6 @@ let delete_task name =
         let time_taken = (Unix.gettimeofday ()) -. task.start_time in
         let exit_code = Fork_helper.exit_code_of_task task.running in
         Log.push (`Plugin (name, time_taken, exit_code));
-        printf "QUEUE: starting request for lifedb scan\n%!";
         Db_thread_access.push Db_thread_access.Lifedb
     |None -> ()
 
@@ -162,7 +161,7 @@ let reschedule_task c name task =
     match task.mode with 
     |Single -> ()
     |Constant ->
-         c#log `Debug (sprintf "restarting %s (constant)" name);
+         Log.logmod "Tasks" "restarting %s (constant)" name;
          let task_status, outfd, errfd = run_command name task.cmd task.cwd in
          let now_time = Unix.gettimeofday () in
          let task = { cmd=task.cmd; outfd=outfd; errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
@@ -172,14 +171,14 @@ let reschedule_task c name task =
          let task_status = Fork_helper.blank_task () in
          let task = { cmd=task.cmd; mode=Periodic p; outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
          Hashtbl.add task_list name task;
-         c#log`Debug (sprintf "scheduling %s: %s" name (Fork_helper.string_of_task task_status))
+         Log.logmod "Tasks" "scheduling %s: %s" name (Fork_helper.string_of_task task_status)
 
 let task_sweep c =
     Hashtbl.iter (fun name task ->
        let td = string_of_task task in
        match Fork_helper.status_of_task task.running with
        |Fork_helper.Running pid ->
-           c#log `Debug (sprintf "sweep: %s" td)
+           Log.logmod "Sweep" "%s" td
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
@@ -188,11 +187,11 @@ let task_sweep c =
                Hashtbl.replace task_list name task
            end
        |Fork_helper.Done exit_code ->
-           c#log `Debug (sprintf "sweep: finished %s" td);
+           Log.logmod "Sweep" "finished %s" td;
            delete_task name;
            reschedule_task c name task;
        |Fork_helper.Killed signal ->
-           c#log `Debug (sprintf "sweep: crashed %s" td);
+           Log.logmod "Sweep" "crashed %s" td;
            delete_task name;
            reschedule_task c name task;
     ) task_list
@@ -244,7 +243,7 @@ let singleton () =
         method post_start_hook c =
             super#post_start_hook c;
             if Lifedb_config.test_mode () then
-                task_poll_period := 2.;
+                task_poll_period := 10.;
             ignore(Thread.create (fun () ->
                 while signal_stop do
                     with_lock m (fun () -> task_sweep c);
