@@ -151,7 +151,7 @@ let destroy_task name =
     |Some task -> begin
         let final_status = Fork_helper.destroy task.running in
         delete_task name;
-        Netplex_cenv.logf `Info "Task %s destroyed: %s" name 
+        Log.logmod "Tasks" "Task %s destroyed: %s" name 
             (Fork_helper.string_of_status final_status);
     end
     |None -> raise (Task_error "task not found")
