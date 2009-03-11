@@ -122,15 +122,33 @@ class TasksFailTestCase(LoginBadTestCase):
     def test_task_get_not_logged_in(self):
         self.assertRaises(client.ResourceForbidden, self.server.task_get, "nonexistent")
 
+class PasswordPassTestCase(LoginOKTestCase):
+    def test_passwd_create(self):
+        username="notsecret"
+        password="verysecret"
+        service="arandomwebsite"
+        self.server.password_create(service, username, password)
+        rpass = self.server.password_get(service, username)
+        self.assertEqual(rpass, password)
+        self.server.password_delete(service, username)
+        self.assertRaises(client.ResourceNotFound, self.server.password_get, username, password)
+
+class PasswordFailTestCase(LoginBadTestCase):
+    def test_passwd_create(self):
+        self.assertRaises(client.ResourceForbidden, self.server.password_create, 'x','x','x')
+        self.assertRaises(client.ResourceForbidden, self.server.password_get, 'x', 'x')
+        self.assertRaises(client.ResourceForbidden, self.server.password_delete, 'x', 'x')
+        
 def suite():
     suite = unittest.TestSuite()
+    suite.addTest(unittest.makeSuite(PasswordPassTestCase, 'test'))
+    suite.addTest(unittest.makeSuite(PasswordFailTestCase, 'test'))
     suite.addTest(unittest.makeSuite(BasicPassTestCase, 'test'))
     suite.addTest(unittest.makeSuite(BasicFailTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksPassTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksFailTestCase, 'test'))
     #suite.addTest(unittest.makeSuite(TasksPassTestCase, 'long_test'))
     return suite
-
 
 if __name__ == '__main__':
     unittest.main(defaultTest='suite')

@@ -129,6 +129,18 @@ class Server(object):
         resp, data = self.resource.get(path=uri("/task/", name))
         return data
 
+    def password_create(self, service, username, password):
+        resp, data = self.resource.post(path='/passwd_create',
+           content = { 'service': service, 'username': username, 'password': password })
+
+    def password_delete(self, service, username):
+        resp, data = self.resource.post(path='/passwd_delete',
+           content = { 'username': username, 'service' : service } )
+
+    def password_get(self, service, username):
+        resp, data = self.resource.get(path=uri('/passwd', service, username))
+        return data['password']
+
 # Internals
 
 
