@@ -17,7 +17,7 @@ let dispatch (cgi : Netcgi.cgi_activation) =
     let url_list = List.filter ((<>) "") (Neturl.url_path url) in
     let url_hd = try List.hd url_list with _ -> "" in
     let url_path = Neturl.join_path (Neturl.url_path url) in
-    Log.logdbg "Lifedb_dispatch: url=%s" url_path;
+    Log.logmod "URL" "%s" url_path;
     match check_auth cgi with
     (* not authenticated *)
     |false -> ()
