@@ -67,7 +67,7 @@ class Server(object):
     """Representation of a LifeDB server.
     """
 
-    def __init__(self, uri=DEFAULT_BASE_URI, cache=None, timeout=None):
+    def __init__(self, username, password, uri=DEFAULT_BASE_URI, cache=None, timeout=None):
         """Initialize the server object.
         
         :param uri: the URI of the server (for example
@@ -80,6 +80,7 @@ class Server(object):
         """
         http = httplib2.Http(cache=cache, timeout=timeout)
         http.force_exception_to_status_code = False
+        http.add_credentials(username, password)
         self.resource = Resource(http, uri)
 
     def __nonzero__(self):
@@ -105,15 +106,6 @@ class Server(object):
         :type: `unicode`
         """)
 
-    def login(self, username, password):
-        resp, data = self.resource.post('/login', content={ 'username' : username, 'password' : password } )
-        self.resource.session = data['session']
-       
-    def logout(self):
-        if self.resource.session:
-            resp, data = self.resource.post('/logout', content={})
-            self.resource.session = None
- 
     def ping(self):
         resp, data = self.resource.get(path='/ping')
         return data
@@ -137,9 +129,6 @@ class Server(object):
         resp, data = self.resource.get(path=uri("/task/", name))
         return data
 
-    def session(self):
-        return self.resource.session
-        
 # Internals
 
 
@@ -151,7 +140,6 @@ class Resource(object):
             http.force_exception_to_status_code = False
         self.http = http
         self.uri = uri
-        self.session = None
 
     def __call__(self, path):
         return type(self)(self.http, uri(self.uri, path))
@@ -179,8 +167,6 @@ class Resource(object):
         headers = headers or {}
         headers.setdefault('Accept', 'application/json')
         headers.setdefault('User-Agent', 'lifedb-python %s' % __version__)
-        if self.session:
-            headers.setdefault('Session', self.session)
         body = None
         if content is not None:
             if not isinstance(content, basestring):
@@ -215,7 +201,7 @@ class Resource(object):
                 error = data
             if status_code == 404:
                 raise ResourceNotFound(error)
-            elif status_code == 403:
+            elif status_code == 403 or status_code == 401:
                 raise ResourceForbidden(error)
             else:
                 raise ServerError((status_code, error))
