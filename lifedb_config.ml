@@ -24,6 +24,7 @@ module Dir = struct
     let log () = !log_dir
     let plugins () = !plugins_dir
     let config () = !config_dir
+    let passwd_db () = Filename.concat !config_dir "passwd.db"
 end
 
 let test_mode_val = ref false
