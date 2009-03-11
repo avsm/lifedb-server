@@ -63,7 +63,6 @@ let start() =
       () in
   Random.self_init ();
   
-  let session_factory = Lifedb_session.singleton () in
   let task_factory = Lifedb_tasks.singleton () in
   Db_thread.start ();
   Db_thread_access.push Db_thread_access.Plugins;
@@ -71,7 +70,7 @@ let start() =
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory; session_factory; task_factory ] 
+    [ nethttpd_factory; task_factory ] 
   cmdline_cfg
 
 let _ = 
