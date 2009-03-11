@@ -52,6 +52,18 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                    mark_get_rpc cgi;
                    Lifedb_tasks.dispatch cgi (`Get name)
             end
+            |`POST, "passwd_create" -> begin
+               let arg = mark_post_rpc cgi in
+               Lifedb_passwd.dispatch cgi (`Store arg)
+            end
+            |`POST, "passwd_delete" -> begin
+               let arg = mark_post_rpc cgi in
+               Lifedb_passwd.dispatch cgi (`Delete arg)
+            end
+            |(`GET|`HEAD), "passwd" -> begin
+               mark_get_rpc cgi;
+               Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
+            end
             |_ -> raise (Invalid_rpc "Unknown request")
         with
         |Invalid_rpc reason ->

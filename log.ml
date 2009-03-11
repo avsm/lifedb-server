@@ -30,6 +30,7 @@ let log_request db = function
         let col_of_module = function
         |"Tasks" -> AT.Red
         |"Plugins" -> AT.Yellow
+        |"Passwd" -> AT.Cyan
         |_ -> AT.Magenta in
         AT.printf [AT.Foreground AT.Cyan] "[%s]" time;
         AT.printf [AT.Foreground (col_of_module m)] "%.10s: " m;

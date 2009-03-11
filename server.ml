@@ -35,9 +35,10 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
 let start() =
   Lifedb_config.read_config "config.json";
   Log.init ();
+  Lifedb_passwd.init ();
   List.iter (fun (a,b) -> 
     Log.push (`Debug (sprintf "%s dir = %s" a b));
-    make_dirs b) [ "LifeDB", (LD.lifedb()); "Log", (LD.log()); "Cache", (LD.cache()) ];
+    make_dirs b) [ "LifeDB", (LD.lifedb()); "Log", (LD.log()); "Cache", (LD.cache()); "Config", (LD.config()) ];
   Log.push (`Debug (sprintf "Plugin scan dirs = [%s]" (String.concat " | " (LD.plugins()))));
   let (opt_list, cmdline_cfg) = Netplex_main.args() in
   Arg.parse
