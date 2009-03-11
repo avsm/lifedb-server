@@ -71,9 +71,8 @@ let string_of_task t =
     sprintf "%s : `%s` %s" mode t.cmd running
 
 let log_task_table () = 
-    Netplex_cenv.log `Info "logging task table...";
     Hashtbl.iter (fun name state ->
-        Netplex_cenv.logf `Info "%s: %s" name (string_of_task state)
+        Log.logmod "Tasks" "%s: %s" name (string_of_task state)
     ) task_list
 
 let find_task name =
