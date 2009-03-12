@@ -8,6 +8,7 @@ open Db_thread_access
 
 let db_thread () = 
     let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db()) in
+    Sql_mirror.init db;
     while true do
         let task = with_lock m (fun () ->
             if Queue.is_empty q then begin

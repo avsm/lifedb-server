@@ -168,7 +168,6 @@ let process_lifeentry db mtypes rootdir fname =
         (* update abrecord in people also *)
     |_ ->
         let lifedb_id = stmt#column 0 in
-        print_endline "update";
         let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=? where id=?" in
         stmt#bind4 ctime mtype people_id lifedb_id;
         let _ = stmt#step_once in
@@ -192,14 +191,14 @@ let process_directory db mtypes rootdir dir =
   begin
   try while true do
      incr counter;
-     if !counter mod 100 == 0 then printf ".%!";
+     if !counter mod 100 == 0 then (); (* printf ".%!"; *)
      let h = readdir dh in
      if Filename.check_suffix h ".lifeentry" then begin
         let fname = sprintf "%s/%s" dir h in
         try
            process_lifeentry db mtypes rootdir fname
-        with
-           e -> print_endline (sprintf "exception in handling %s: %s" fname (Printexc.to_string e))
+        with e -> 
+           Log.logmod "Mirror" "Exception in %s: %s" fname (Printexc.to_string e)
      end
   done with End_of_file -> ()
   end;
@@ -224,18 +223,16 @@ let dir_is_updated db dir mtime =
   let _ = stmt#step_once in ()
 
 let check_directory db mtypes rootdir dir = 
-  printf "%s ...%!" dir;
   match dir_needs_update db dir with
   |Some old_mtime  ->
      db#transaction (fun () ->
          process_directory db mtypes rootdir dir;
          dir_is_updated db dir old_mtime;
      );
-     print_endline "o"
-  |None ->
-     print_endline "*"
+     Log.logmod "Mirror" "Processing %s" dir
+  |None -> ()
 
-let init_db db =
+let init db =
   db#exec "create table if not exists
        dircache (dir text primary key, mtime integer)";
   db#exec "create table if not exists
@@ -252,11 +249,12 @@ let init_db db =
   db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
 let do_scan db =
+  Log.logmod "Mirror" "Starting scan";
   let lifedb_path = Lifedb_config.Dir.lifedb () in
-  init_db db;
   let mtypes = get_all_mtypes db in
   if not (Lifedb_config.test_mode ()) then
-      walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path)
+      walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path);
+  Log.logmod "Mirror" "Finished scan"
 
 let dispatch cgi args =
   ()
