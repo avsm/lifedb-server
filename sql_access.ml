@@ -40,6 +40,9 @@ class statement db uid sql = object
             db_must_ok (fun () -> bind s (i+1) v)
         )
 
+    method bind0 =
+        db_must_ok (fun () -> reset s)
+
     method bind1 arg =
         db_must_ok (fun () -> reset s);
         db_must_ok (fun () -> bind s 1 arg)

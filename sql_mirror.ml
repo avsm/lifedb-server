@@ -64,6 +64,7 @@ let summaryofmsg js : string =
 let get_all_mtypes db =
   let h = Hashtbl.create 1 in
   let stmt = db#stmt "all_mtypes" "select id,mtype,implements from mtype_map" in
+  stmt#bind0;
   stmt#step_all (fun () ->
       let m = { m_id=stmt#column 0; m_implements=(Sqlite3.Data.to_string (stmt#column 2)) } in
       Hashtbl.add h (Sqlite3.Data.to_string (stmt#column 1)) m
@@ -75,7 +76,11 @@ let process_lifeentry db mtypes rootdir fname =
   let le = lifeentry_of_json json in
   let mtype_info = try 
       Hashtbl.find mtypes le._type
-    with Not_found -> failwith (sprintf "unknown mtype %s" le._type) in
+    with Not_found -> begin
+       let all_mtypes = String.concat "|" (Hashtbl.fold (fun k v a -> k :: a) mtypes []) in
+       failwith (sprintf "unknown mtype %s (we have: %s)" le._type all_mtypes) 
+    end
+  in
   match lifedb_entry_type mtype_info.m_implements with
   |Contact -> begin
     (* Message is a contact *)
