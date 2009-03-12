@@ -127,6 +127,11 @@ setup(
 
     install_requires = ['httplib2'],
 
+    entry_points = {
+         'console_scripts': [
+             'lifedb-passwd = lifedb.passwd:main',
+         ],
+    },
 #    entry_points = {
 #        'console_scripts': [
 #            'couchpy = couchdb.view:main',
