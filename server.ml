@@ -36,6 +36,7 @@ let start() =
   Lifedb_config.read_config "config.json";
   Log.init ();
   Lifedb_passwd.init ();
+  Lifedb_tasks.init ();
   List.iter (fun (a,b) -> 
     Log.push (`Debug (sprintf "%s dir = %s" a b));
     make_dirs b) [ "LifeDB", (LD.lifedb()); "Log", (LD.log()); "Cache", (LD.cache()); "Config", (LD.config()) ];
@@ -64,14 +65,13 @@ let start() =
       () in
   Random.self_init ();
   
-  let task_factory = Lifedb_tasks.singleton () in
   Db_thread.start ();
   Db_thread_access.push Db_thread_access.Plugins;
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
     Netplex_workload.workload_manager_factories (* ... all ways of workload management *)
-    [ nethttpd_factory; task_factory ] 
+    [ nethttpd_factory ] 
   cmdline_cfg
 
 let _ = 

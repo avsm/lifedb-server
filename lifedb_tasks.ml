@@ -181,7 +181,7 @@ let destroy_task name =
     end
     |None -> raise (Task_error "task not found")
 
-let reschedule_task c name task =
+let reschedule_task name task =
     match task.mode with 
     |Single -> ()
     |Constant ->
@@ -199,12 +199,12 @@ let reschedule_task c name task =
          Hashtbl.add task_list name task;
          Log.logmod "Tasks" "scheduling %s: %s" name (Fork_helper.string_of_task task_status)
 
-let task_sweep c =
+let task_sweep () =
     Hashtbl.iter (fun name task ->
        let td = string_of_task task in
        match Fork_helper.status_of_task task.running with
        |Fork_helper.Running pid ->
-           Log.logmod "Sweep" "%s" td
+           Log.logmod "Sweep" "%s ... %s" name td
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
@@ -213,13 +213,13 @@ let task_sweep c =
                Hashtbl.replace task_list name task
            end
        |Fork_helper.Done exit_code ->
-           Log.logmod "Sweep" "finished %s" td;
+           Log.logmod "Sweep" "%s ... finished %s" name td;
            delete_task name;
-           reschedule_task c name task;
+           reschedule_task name task;
        |Fork_helper.Killed signal ->
-           Log.logmod "Sweep" "crashed %s" td;
+           Log.logmod "Sweep" "%s ... crashed %s" name td;
            delete_task name;
-           reschedule_task c name task;
+           reschedule_task name task;
     ) task_list
 
 let dispatch cgi = function
@@ -260,43 +260,29 @@ let dispatch cgi = function
                Lifedb_rpc.return_error cgi `Bad_request "Task error" err
        )
 
-let singleton () =
-    let hooks = object
-        inherit Netplex_kit.empty_processor_hooks() as super
+(* task thread which waits on a condition to do a sweep.  is signalled regularly
+   or via a process exiting and delivering a SIGCHLD *)
+let c = Condition.create ()
+let cm = Mutex.create ()
+let task_thread () =
+    while true do
+        with_lock cm (fun () ->
+            Condition.wait c cm;
+            with_lock m task_sweep;
+        )
+    done
 
-        val mutable signal_stop = true
+(* thread to kick the sweeping thread regularly to update task status. *)
+let task_regular_kick () =
+    while true do
+        with_lock cm (fun () ->
+            Condition.signal c
+        );
+        Thread.delay !task_poll_period
+    done
 
-        method post_start_hook c =
-            super#post_start_hook c;
-            if Lifedb_config.test_mode () then
-                task_poll_period := 10.;
-            ignore(Thread.create (fun () ->
-                while signal_stop do
-                    with_lock m (fun () -> task_sweep c);
-                    Thread.delay !task_poll_period;
-                done;
-                c#log `Debug "Terminating task thread"
-            ) ())
-            
-        method receive_admin_message c msg args =
-            c#log `Info (sprintf "received admin msg %s [%s]" msg (String.concat "," (Array.to_list args)));
-            match msg,args with
-            |"tasks",[|"dump"|] ->
-                c#log `Debug "Dumping tasks table";
-                with_lock m log_task_table
-            |_ -> ()
-            
-        method shutdown () =
-            signal_stop <- false;
-            super#shutdown ()
-    end in
-
-    object (self)
-        method name = "tasks"
-        method create_processor _ _ _ =
-            object (self)
-            inherit Netplex_kit.processor_base hooks
-            method process ~when_done _ _ _ = when_done () (* should not ever be called *)
-            method supported_ptypes = [ `Multi_threading ]
-        end
-    end
+let init () =
+    let _ = Thread.create task_thread () in
+    let _ = Thread.create task_regular_kick () in
+    Sys.set_signal Sys.sigchld (Sys.Signal_handle (fun _ -> 
+        with_lock cm (fun () -> Condition.signal c)))
