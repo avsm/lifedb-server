@@ -160,11 +160,11 @@ let process_lifeentry db mtypes rootdir fname =
     let stmt = db#stmt "get_lifedb" "select id from lifedb where filename=?" in
     stmt#bind1 (Sqlite3.Data.TEXT fname);
     let people_id = process_addr from_addr in
+    let summary = Sqlite3.Data.TEXT (summaryofmsg le) in
     let lifedb_id = match stmt#step_once with
     |0 ->
         (* brand new lifedb record *)
         let insstmt = db#stmt "ins_lifedb" "insert into lifedb values(NULL,?,datetime(?,\"unixepoch\"),?,?,?)" in
-        let summary = Sqlite3.Data.TEXT (summaryofmsg le) in
         insstmt#bind [| (Sqlite3.Data.TEXT fname); ctime; mtype; people_id; summary |];
         let _ = insstmt#step_once in
         stmt#bind1 (Sqlite3.Data.TEXT fname);
@@ -173,8 +173,8 @@ let process_lifeentry db mtypes rootdir fname =
         (* update abrecord in people also *)
     |_ ->
         let lifedb_id = stmt#column 0 in
-        let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=? where id=?" in
-        stmt#bind4 ctime mtype people_id lifedb_id;
+        let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=?,summary=? where id=?" in
+        stmt#bind [|ctime;mtype;people_id;lifedb_id;summary |];
         let _ = stmt#step_once in
         people_id
         (* XXX update abrecord in people also *)
