@@ -44,4 +44,12 @@ stop:
 test:
 	cd client/python && $(PYTHON) setup.py test
 
+.PHONY: scripts
+scripts:
+	rm -rf scripts
+	mkdir scripts
+	cd client/python && $(PYTHON) setup.py install_scripts --install-dir $(PWD)/scripts
+	echo export PYTHONPATH=$(PWD)/client/python:$$PYTHONPATH > export-var.sh
+	. ./export-var.sh
+
 include $(OCAMLMAKEFILE)
