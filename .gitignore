@@ -9,5 +9,6 @@
 *.pyc
 /lifedb_server
 /client/python/LifeDB.egg-info
+/client/python/build
 /forktest
 /passtest
