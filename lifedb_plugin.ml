@@ -19,6 +19,7 @@ type json config_info = <
    name: string;
    plugin: string;
    mode: string;
+   silo: string;
    ?period: int option;
    ?secret: config_passwd option;
    ?args: (string , string) Hashtbl.t option
@@ -50,6 +51,7 @@ let scan_config_file db config_file =
         method cwd=Some plugin_dir
         method secret=task#secret
         method args=task#args
+        method silo=task#silo
     end in
     with_lock Lifedb_tasks.m (fun () -> Lifedb_tasks.find_or_create_task task)
 
