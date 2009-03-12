@@ -121,6 +121,8 @@ let run_command name cmd cwd secret args silo =
     logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
     let lifedb_config_dir = Filename.concat (Lifedb_config.Dir.lifedb ()) silo in
     let lifedb_cache_dir = Filename.concat (Lifedb_config.Dir.cache ()) silo in
+    make_dirs lifedb_config_dir;
+    make_dirs lifedb_cache_dir;
     let env = Array.append env [| sprintf "LIFEDB_DIR=%s" lifedb_config_dir;
       (sprintf "LIFEDB_CACHE_DIR=%s" lifedb_cache_dir);
       (sprintf "HOME=%s" (Sys.getenv "HOME"));
