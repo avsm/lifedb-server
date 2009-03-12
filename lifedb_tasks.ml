@@ -15,7 +15,8 @@ type json rpc_task_create = <
    mode: string;
    ?cwd: string option;
    ?period: int option;
-   ?secret: task_passwd option
+   ?secret: task_passwd option;
+   ?args: (string, string) Hashtbl.t option
 >
 and task_passwd = <
    service: string;
@@ -29,7 +30,8 @@ and rpc_task = <
    mode: string;
    ?period: int option;
    ?pid: int option;
-   ?secret: task_passwd option
+   ?secret: task_passwd option;
+   ?args: (string , string) Hashtbl.t option
 >
 and rpc_task_list = (string,rpc_task) Hashtbl.t
 
@@ -44,6 +46,7 @@ type task_state = {
    cwd: string;
    start_time: float; 
    secret: (string * string) option;
+   args : (string, string) Hashtbl.t option;
    outfd: Unix.file_descr option;
    errfd: Unix.file_descr option;
    running: Fork_helper.task;
@@ -67,7 +70,8 @@ let json_of_task t =
        method mode=mode
        method period=period
        method pid=pid
-       method secret=secret
+       method secret=secret 
+       method args=t.args
    end
  
 let string_of_task t =
@@ -89,7 +93,7 @@ let find_task name =
     with
        Not_found -> None
 
-let run_command name cmd cwd secret =
+let run_command name cmd cwd secret args =
     Log.logmod "Tasks" "Executing command '%s' (%s)" name cmd;
     let env = match secret with |None -> [||] 
       |Some (s,u) -> begin
@@ -98,6 +102,9 @@ let run_command name cmd cwd secret =
          |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for this task"; [||]
       end
     in
+    let args = match args with |None -> [||]
+      |Some argh -> Array.of_list (Hashtbl.fold (fun k v a -> sprintf "%s=%s" k v :: a) argh []) in
+    let env = Array.append env args in
     let logdir = Lifedb_config.Dir.log() in
     let logfile = sprintf "%s/%s.log" logdir name in
     let errlogfile = sprintf "%s/%s.err" logdir name in
@@ -131,10 +138,10 @@ let create_task params =
     |Some c -> c  |None -> "/" in
     let secret = match params#secret with 
       |None -> None |Some s -> Some (s#service, s#username) in
-    let task_status, outfd, errfd = run_command params#name params#cmd cwd secret in
+    let task_status, outfd, errfd = run_command params#name params#cmd cwd secret params#args in
     let now_time = Unix.gettimeofday () in
     let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; 
-       secret=secret; start_time=now_time; running=task_status } in
+       secret=secret; start_time=now_time; running=task_status; args=params#args } in
     Hashtbl.add task_list params#name task;
     Log.logmod "Tasks" "Created task '%s' %s" params#name (string_of_task task)
 
@@ -179,15 +186,15 @@ let reschedule_task c name task =
     |Single -> ()
     |Constant ->
          Log.logmod "Tasks" "restarting %s (constant)" name;
-         let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret in
+         let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret task.args in
          let now_time = Unix.gettimeofday () in
-         let task = { cmd=task.cmd; outfd=outfd; secret=task.secret;
+         let task = { cmd=task.cmd; outfd=outfd; secret=task.secret; args=task.args;
             errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
          Hashtbl.add task_list name task
     |Periodic p ->
          let start_time = Unix.gettimeofday () +. (float p) in
          let task_status = Fork_helper.blank_task () in
-         let task = { cmd=task.cmd; mode=Periodic p; secret=task.secret;
+         let task = { cmd=task.cmd; mode=Periodic p; secret=task.secret; args=task.args;
            outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
          Hashtbl.add task_list name task;
          Log.logmod "Tasks" "scheduling %s: %s" name (Fork_helper.string_of_task task_status)
@@ -201,7 +208,7 @@ let task_sweep c =
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
-               let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret in
+               let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret task.args in
                let task = { task with outfd=outfd; errfd=errfd; start_time=curtime; running=task_status } in
                Hashtbl.replace task_list name task
            end

@@ -21,7 +21,7 @@ type json config_info = <
    mode: string;
    ?period: int option;
    ?secret: config_passwd option;
-   ?args: (string, string) Hashtbl.t option
+   ?args: (string , string) Hashtbl.t option
 >
 and config_passwd = <
    service: string;
@@ -49,6 +49,7 @@ let scan_config_file db config_file =
         method period=task#period
         method cwd=Some plugin_dir
         method secret=task#secret
+        method args=task#args
     end in
     with_lock Lifedb_tasks.m (fun () -> Lifedb_tasks.find_or_create_task task)
 
