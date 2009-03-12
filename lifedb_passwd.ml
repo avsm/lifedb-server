@@ -59,6 +59,10 @@ type passwd_req =
 let creq = Event.new_channel ()
 let cresp = Event.new_channel ()
 
+let lookup_passwd service username =
+   Event.sync (Event.send creq (Get (service, username)));
+   Event.sync (Event.receive cresp)
+
 let passwd_thread () =
     let db = new Sql_access.db (Lifedb_config.Dir.passwd_db ()) in
     db#exec "create table if not exists passwd (service text, ctime integer,
@@ -102,8 +106,7 @@ let dispatch (cgi:Netcgi.cgi_activation) = function
     |`Get url_list -> begin
         match url_list with
         |[service; username] -> begin
-            Event.sync (Event.send creq (Get (service, username)));
-            match Event.sync (Event.receive cresp) with
+            match lookup_passwd service username with
             |Some encpasswd -> 
                  let resp = object method service=service method username=username method password=encpasswd end in
                  cgi#output#output_string (Json_io.string_of_json (json_of_rpc_passwd_store resp))

@@ -14,18 +14,22 @@ type json rpc_task_create = <
    cmd: string;
    mode: string;
    ?cwd: string option;
-   ?period: int option
+   ?period: int option;
+   ?secret: task_passwd option
 >
-
-type json rpc_task_destroy = <
+and task_passwd = <
+   service: string;
+   username: string
+>
+and rpc_task_destroy = <
    name: string
 >
-
-type json rpc_task = <
+and rpc_task = <
    cmd: string;
    mode: string;
    ?period: int option;
-   ?pid: int option
+   ?pid: int option;
+   ?secret: task_passwd option
 >
 and rpc_task_list = (string,rpc_task) Hashtbl.t
 
@@ -39,6 +43,7 @@ type task_state = {
    mode: task_mode;
    cwd: string;
    start_time: float; 
+   secret: (string * string) option;
    outfd: Unix.file_descr option;
    errfd: Unix.file_descr option;
    running: Fork_helper.task;
@@ -55,11 +60,14 @@ let json_of_task t =
    |Single -> "single", None
    |Constant -> "constant", None in
    let pid = Fork_helper.pid_of_task t.running in
+   let secret = match t.secret with |None -> None
+      |Some (s,u) -> Some (object method service=s method username=u end) in
    object
        method cmd=t.cmd
        method mode=mode
        method period=period
        method pid=pid
+       method secret=secret
    end
  
 let string_of_task t =
@@ -81,8 +89,15 @@ let find_task name =
     with
        Not_found -> None
 
-let run_command name cmd cwd =
+let run_command name cmd cwd secret =
     Log.logmod "Tasks" "Executing command '%s' (%s)" name cmd;
+    let env = match secret with |None -> [||] 
+      |Some (s,u) -> begin
+         match Lifedb_passwd.lookup_passwd s u with
+         |Some p -> [| ("LIFEDB_PASSWORD=" ^ p); ("LIFEDB_USERNAME="^u) |] 
+         |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for this task"; [||]
+      end
+    in
     let logdir = Lifedb_config.Dir.log() in
     let logfile = sprintf "%s/%s.log" logdir name in
     let errlogfile = sprintf "%s/%s.err" logdir name in
@@ -93,7 +108,7 @@ let run_command name cmd cwd =
     let tmstr = current_datetime () in
     logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
     logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
-    let env = [| sprintf "LIFEDB_DIR=%s" (Lifedb_config.Dir.lifedb()); 
+    let env = Array.append env [| sprintf "LIFEDB_DIR=%s" (Lifedb_config.Dir.lifedb()); 
       (sprintf "LIFEDB_CACHE_DIR=%s" (Lifedb_config.Dir.cache()));
       (sprintf "HOME=%s" (Sys.getenv "HOME"));
       (sprintf "USER=%s" (Sys.getenv "USER")) |] in
@@ -114,9 +129,12 @@ let create_task params =
     |_,_ -> raise (Task_error "unknown task mode") in
     let cwd = match params#cwd with
     |Some c -> c  |None -> "/" in
-    let task_status, outfd, errfd = run_command params#name params#cmd cwd in
+    let secret = match params#secret with 
+      |None -> None |Some s -> Some (s#service, s#username) in
+    let task_status, outfd, errfd = run_command params#name params#cmd cwd secret in
     let now_time = Unix.gettimeofday () in
-    let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; start_time=now_time; running=task_status } in
+    let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; 
+       secret=secret; start_time=now_time; running=task_status } in
     Hashtbl.add task_list params#name task;
     Log.logmod "Tasks" "Created task '%s' %s" params#name (string_of_task task)
 
@@ -161,14 +179,16 @@ let reschedule_task c name task =
     |Single -> ()
     |Constant ->
          Log.logmod "Tasks" "restarting %s (constant)" name;
-         let task_status, outfd, errfd = run_command name task.cmd task.cwd in
+         let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret in
          let now_time = Unix.gettimeofday () in
-         let task = { cmd=task.cmd; outfd=outfd; errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
+         let task = { cmd=task.cmd; outfd=outfd; secret=task.secret;
+            errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
          Hashtbl.add task_list name task
     |Periodic p ->
          let start_time = Unix.gettimeofday () +. (float p) in
          let task_status = Fork_helper.blank_task () in
-         let task = { cmd=task.cmd; mode=Periodic p; outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
+         let task = { cmd=task.cmd; mode=Periodic p; secret=task.secret;
+           outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
          Hashtbl.add task_list name task;
          Log.logmod "Tasks" "scheduling %s: %s" name (Fork_helper.string_of_task task_status)
 
@@ -181,7 +201,7 @@ let task_sweep c =
        |Fork_helper.Not_started ->
            let curtime = Unix.gettimeofday () in
            if task.start_time < curtime then begin
-               let task_status, outfd, errfd = run_command name task.cmd task.cwd in
+               let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret in
                let task = { task with outfd=outfd; errfd=errfd; start_time=curtime; running=task_status } in
                Hashtbl.replace task_list name task
            end
