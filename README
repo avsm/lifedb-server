@@ -27,7 +27,65 @@ directory.
  * plugins_directory: List of directories to search for plugins
  * log_directory: Directory to drop task logfiles and database to
  * cache_directory: temporary space to hold cache files from plugins
+ * config_directory: directory where passwords and task information is stored.
  * test_mode: if true, will not actually run commands but do everything else.
+
+Plugins
+-------
+
+Each plugin is in a directory with a LIFEDB_PLUGIN file in the directory
+indicating it should be registered.  Here is an example file:
+
+{
+   "name" : "Twitter",
+   "cmd" : "make run",
+   "declares" : [
+       {
+         "pltype" : "com.twitter",
+         "description" : "Twitter",
+         "implements" : "public.message"
+       }
+   ]
+}
+
+The name is the plugin UUID, the cmd is how to run it (it executes with
+the current working directory being the plugin directory).  The declares
+registers a media type in the LifeDB SQL database.
+
+For every plugin, the user may create 0 or more task configurations which
+declares how to execute the plugin.  These are files ending with '.conf' in
+the configuration_directory.  Here is an example (twitter again):
+
+{
+  "name": "twitter-avsm",
+  "plugin": "Twitter",
+  "mode": "periodic",
+  "period" : 3600,
+  "secret" : {
+      "service" : "twitter-avsm",
+      "username" : "avsm"
+  },
+  "args" : {
+      "FULL_SYNC" : "0"
+  }
+
+The 'name' is how to identify the running task for debugging and querying
+it over the HTTP interface.  The 'plugin' is the previously registered plugin
+name.  'mode' can be:
+  * periodic : run it regularly every 'period' seconds.
+  * constant : make sure this is always running, and restart if it dies
+  * single : run it once off, and dont repeat it.
+
+'secret' is optional and used for looking up passwords to send to the script
+when it executes.  The service/username combination are looked up from the
+database and passed to the script via the LIFEDB_USERNAME and LIFEDB_PASSWORD
+environment variables if this key is present.
+
+'args' are for additional environment variables to pass to the script, so the
+user can toggle knobs for different syncing behaviour.
+
+As a convention, there is a 'default.conf' file in each plugin directory which
+can be copied to the configuration directory for a reasonable sensible default.
 
 Running
 -------
@@ -54,4 +112,3 @@ are permitted.
  * /config  : returns the global server configuration as JSON with all 
    variables fully substituted in.
 
- 
