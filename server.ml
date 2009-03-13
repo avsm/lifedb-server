@@ -39,7 +39,7 @@ let start() =
      prerr_endline (sprintf "Unable to retrieve passphrase for user: %s" (Lifedb_config.root_user ()));
      exit 1;
   |Some p -> 
-     Lifedb_passwd.passphrase := p in
+     Lifedb_rpc.passphrase := p in
   Log.init ();
   Lifedb_passwd.init ();
   Lifedb_tasks.init ();

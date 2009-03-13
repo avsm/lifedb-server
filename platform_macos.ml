@@ -1,5 +1,6 @@
 (* Platform-specific implementations of various functions *)
 open Printf
+open Str
 
 let set_password username password =
     let cmd = sprintf "/usr/bin/security add-generic-password -s LifeDB -a '%s' -p '%s'"
@@ -15,5 +16,5 @@ let get_password username =
       (String.escaped username) in
     let ec,out,err = Fork_helper.system cmd [||] (Sys.getcwd ()) in
     match ec with
-    |0 -> if out = "" then None else Some out
+    |0 -> if out = "" then None else Some (List.hd (Str.split (Str.regexp_string "\n") out))
     |_ -> None

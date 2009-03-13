@@ -4,14 +4,12 @@ open Printf
 open Utils
 open Sqlite3
 
-let passphrase = ref ""
-
 let store_passwd db time service username passwd =
     Log.logmod "Passwd" "Storing password for service=%s username=%s" service username;
     let service' = Data.TEXT service in
     let time' = Data.INT time in
     let username' = Data.TEXT username in
-    match Passwords.encrypt_password time !passphrase passwd with
+    match Passwords.encrypt_password time !Lifedb_rpc.passphrase passwd with
     |Some encpasswd -> begin
         let encpasswd' = Data.TEXT encpasswd in
         let stmt = db#stmt "checkpass" "select service,username from passwd where service=? and username=?" in
@@ -41,7 +39,7 @@ let get_passwd db service username =
         let encpasswd' = stmt#column 1 in
         let time = match time' with |Data.INT x -> x |x -> Int64.of_string (Data.to_string x) in
         let encpasswd = Data.to_string encpasswd' in
-        Passwords.decrypt_password time !passphrase encpasswd
+        Passwords.decrypt_password time !Lifedb_rpc.passphrase encpasswd
 
 let delete_passwd db service username =
     Log.logmod "Passwd" "Password delete request for service=%s username=%s" service username;

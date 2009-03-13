@@ -10,6 +10,8 @@ type json rpc_result_error = {
   
 exception Invalid_rpc of string
 
+let passphrase = ref ""
+
 let return_error (cgi:Netcgi.cgi_activation) (code:Nethttp.http_status) error reason =
     cgi#output#rollback_work ();
     cgi#set_header ~status:code ~cache:`No_cache 
@@ -26,7 +28,7 @@ let return_need_auth (cgi:Netcgi.cgi_activation) =
         ["basic", ["realm", "LifeDB credentials"]]
 
 let check_passwd username passwd =
-    (username = "foo") && (passwd = "bar")
+    (username = (Lifedb_config.root_user ())) && (passwd = (!passphrase))
 
 let check_auth cgi =
     try begin
