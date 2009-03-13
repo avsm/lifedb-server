@@ -30,6 +30,19 @@ directory.
  * config_directory: directory where passwords and task information is stored.
  * test_mode: if true, will not actually run commands but do everything else.
 
+Password Management
+-------------------
+
+The server has a global passphrase (stored in the Keychain on MacOS X) which
+must be set before it will start.  This can be done with the ./set_passphrase.sh
+script in this repository.
+
+Once that is done, you can do  "make scripts && . ./export-var.sh" to build
+a development copy of the Python console scripts.  Run ./scripts/lifedb-passwd
+to add encrypted service/username/password entries for the various tasks.
+The service string should match the service/username definied in the task
+configuration file (see below).
+
 Plugins
 -------
 
@@ -60,6 +73,7 @@ the configuration_directory.  Here is an example (twitter again):
   "name": "twitter-avsm",
   "plugin": "Twitter",
   "mode": "periodic",
+  "silo", "Twitter/avsm",
   "period" : 3600,
   "secret" : {
       "service" : "twitter-avsm",
@@ -80,6 +94,9 @@ name.  'mode' can be:
 when it executes.  The service/username combination are looked up from the
 database and passed to the script via the LIFEDB_USERNAME and LIFEDB_PASSWORD
 environment variables if this key is present.
+
+'silo' defines the subdirectory of the LifeDB this task should put its data
+into.
 
 'args' are for additional environment variables to pass to the script, so the
 user can toggle knobs for different syncing behaviour.
