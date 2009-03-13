@@ -97,3 +97,17 @@ let destroy t =
    |_ -> () in
    let () = match t.thread with |Some t -> Thread.join t |None -> () in
    !(t.status)
+
+let system cmd env cwd =
+   let ob = Buffer.create 1 in
+   let eb = Buffer.create 1 in
+   let ofn = Buffer.add_string ob in
+   let efn = Buffer.add_string eb in
+   let t = create cmd env cwd ofn efn in
+   let () = match t.thread with
+   |Some th -> Thread.join th
+   |None -> assert false in
+   let os = Buffer.contents ob in
+   let es = Buffer.contents eb in
+   let ec = exit_code_of_task t in
+   ec,os,es
