@@ -34,6 +34,12 @@ let process1 (cgi : Netcgi1_compat.Netcgi_types.cgi_activation) =
 
 let start() =
   Lifedb_config.read_config "config.json";
+  let _ = match Platform.get_password (Lifedb_config.root_user ()) with
+  |None ->
+     prerr_endline (sprintf "Unable to retrieve passphrase for user: %s" (Lifedb_config.root_user ()));
+     exit 1;
+  |Some p -> 
+     Lifedb_passwd.passphrase := p in
   Log.init ();
   Lifedb_passwd.init ();
   Lifedb_tasks.init ();

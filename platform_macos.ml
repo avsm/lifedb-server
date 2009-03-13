@@ -15,5 +15,5 @@ let get_password username =
       (String.escaped username) in
     let ec,out,err = Fork_helper.system cmd [||] (Sys.getcwd ()) in
     match ec with
-    |0 -> Some out
+    |0 -> if out = "" then None else Some out
     |_ -> None

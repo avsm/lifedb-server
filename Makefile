@@ -10,8 +10,10 @@ export DEBUG
 OCAMLRUNPARAM=b
 export OCAMLRUNPARAM
 
+PLATFORM=macos
+
 USE_CAMLP4 := yes
-SOURCES= custom_unix_stubs.c fork_helper.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
+SOURCES= custom_unix_stubs.c fork_helper.ml platform.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
 	passwords.ml  \
 	sql_mtype_map.ml sql_mirror.ml \
 	lifedb_rpc.ml \
@@ -51,5 +53,8 @@ scripts:
 	cd client/python && $(PYTHON) setup.py install_scripts --install-dir $(PWD)/scripts
 	echo export PYTHONPATH=$(PWD)/client/python:$$PYTHONPATH > export-var.sh
 	. ./export-var.sh
+
+platform.ml: platform_$(PLATFORM).ml
+	cp $< $@
 
 include $(OCAMLMAKEFILE)

@@ -33,6 +33,8 @@ let test_mode () = !test_mode_val
 let config_filename_val = ref ""
 let config_filename () = !config_filename_val
 
+let root_user () = "root"
+
 let read_config file =
     let json = Json_io.load_json file in
     let conf = config_of_json json in
