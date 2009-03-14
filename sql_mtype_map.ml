@@ -2,11 +2,18 @@ open Utils
 open Sqlite3
 open Printf
 
-let update db params =
+let update db plugin_dir params =
     let mtype = Data.TEXT params#pltype in
     let descr = Data.TEXT params#description in
     let implements = Data.TEXT params#implements in
-    let icon = match params#icon with |None -> Data.NULL |Some t -> Data.TEXT t in
+    let icon = match params#icon with
+      |None -> Data.NULL 
+      |Some t -> 
+         let ft = if Filename.is_relative t then
+            Filename.concat plugin_dir t
+         else t in
+         Data.TEXT ft
+    in
     db#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, 
         label text, icon text, implements text)";
     let gets = db#stmt "update_mtype_get" "select id from mtype_map where mtype=?" in
