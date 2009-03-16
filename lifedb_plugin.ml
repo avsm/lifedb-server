@@ -66,15 +66,17 @@ let do_scan db =
     Hashtbl.clear plugins;
     Log.logmod "Plugins" "Starting scan";
     List.iter (fun dir ->
-        let dh = Unix.opendir dir in
-        try_final (fun () ->
-            repeat_until_eof (fun () ->
-                let next_dir = read_next_dir dh in
-                let plugin_info = sprintf "%s/%s/%s" dir next_dir plugin_info_file in
-                if Sys.file_exists plugin_info then
-                    scan_plugin_dir db (Filename.concat dir next_dir) plugin_info
-            ) 
-        ) (fun () -> Unix.closedir dh);
+        try
+            let dh = Unix.opendir dir in
+            try_final (fun () ->
+                repeat_until_eof (fun () ->
+                    let next_dir = read_next_dir dh in
+                    let plugin_info = sprintf "%s/%s/%s" dir next_dir plugin_info_file in
+                    if Sys.file_exists plugin_info then
+                        scan_plugin_dir db (Filename.concat dir next_dir) plugin_info
+                ) 
+            ) (fun () -> Unix.closedir dh);
+        with Unix.Unix_error _ -> Log.logmod "Plugins" "Skipping directory: %s" dir
     ) (Lifedb_config.Dir.plugins ());
     let config_dir = Lifedb_config.Dir.config () in
     let dh = Unix.opendir config_dir in
