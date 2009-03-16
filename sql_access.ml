@@ -100,7 +100,7 @@ class db fname =
         end
 
     method transaction fn =
-        self#exec "begin";
+        self#exec "begin deferred transaction";
         try
             let () = fn () in
             self#exec "commit transaction"
