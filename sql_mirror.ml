@@ -31,7 +31,8 @@ let walk_directory_tree dir walkfn =
     try_final (fun () ->
       repeat_until_eof (fun () ->
          let nextdir = read_next_dir dh in
-         walk (Filename.concat dir nextdir)
+         if nextdir <> "_att" then
+             walk (Filename.concat dir nextdir)
       );
     ) (fun () -> Unix.closedir dh);
   in
