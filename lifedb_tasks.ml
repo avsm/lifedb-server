@@ -31,6 +31,7 @@ and rpc_task = <
    mode: string;
    silo: string;
    ?period: int option;
+   start_time: float;
    ?pid: int option;
    ?secret: task_passwd option;
    ?args: (string , string) Hashtbl.t option
@@ -76,6 +77,7 @@ let json_of_task t =
        method secret=secret 
        method args=t.args
        method silo=t.silo
+       method start_time=t.start_time
    end
  
 let string_of_task t =
