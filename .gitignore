@@ -12,3 +12,8 @@
 /client/python/build
 /forktest
 /passtest
+/export-var.sh
+/platform.ml
+/scripts/
+/mactest
+/lifesql
