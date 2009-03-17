@@ -65,6 +65,14 @@ class statement db uid sql = object
         db_must_ok (fun () -> bind s 3 arg3);
         db_must_ok (fun () -> bind s 4 arg4)
 
+    method int_col c =
+        match column s c with
+        |Data.INT x -> x
+        |x -> Int64.of_string (Data.to_string x)
+
+    method str_col c =
+        Data.to_string (column s c)
+
     method step_once =
         let () = match db_busy_retry (fun () -> step s) with
         |Rc.ROW -> ()
@@ -74,6 +82,7 @@ class statement db uid sql = object
 
     method step_all fn =
         while db_busy_retry (fun () -> step s) = Rc.ROW do
+           (* XXX need to check for errors *)
            let () = fn () in ()
         done
 
