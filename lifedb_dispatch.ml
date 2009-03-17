@@ -29,8 +29,8 @@ let dispatch (cgi : Netcgi.cgi_activation) =
             |(`HEAD|`GET), "ping" ->
                 cgi#output#output_string "pong";
             |`POST, "scan" ->
-               let arg = mark_post_rpc cgi in
-               Lifedb_plugin.dispatch cgi arg
+               let _ = mark_post_rpc cgi in
+               Lifedb_plugin.dispatch cgi `Scan
             |`POST, "mirror" -> begin
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg
@@ -42,16 +42,18 @@ let dispatch (cgi : Netcgi.cgi_activation) =
             |`POST, "task_destroy" -> 
                let arg = mark_post_rpc cgi in
                Lifedb_tasks.dispatch cgi (`Destroy arg)
-            |`GET, "task" -> begin
+            |`GET, "task" ->
                let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
-               match tasksel with
-               |"_all" ->
-                   mark_get_rpc cgi; 
-                   Lifedb_tasks.dispatch cgi (`List)
-               |name ->
-                   mark_get_rpc cgi;
-                   Lifedb_tasks.dispatch cgi (`Get name)
-            end
+               mark_get_rpc cgi;
+               Lifedb_tasks.dispatch cgi (match tasksel with
+               |"_all" -> `List
+               |name -> `Get name)
+            |`GET, "plugin" ->
+               let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
+               mark_get_rpc cgi;
+               Lifedb_plugin.dispatch cgi (match tasksel with
+               |"_all" -> `List
+               |name ->  `Get name)
             |`POST, "passwd_create" -> begin
                let arg = mark_post_rpc cgi in
                Lifedb_passwd.dispatch cgi (`Store arg)

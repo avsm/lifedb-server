@@ -14,6 +14,13 @@ and plugin_decl = <
    implements : string;
    ?icon : string option
 >
+and plugin_rpc = <
+   name: string;
+   cmd: string;
+   declares: plugin_decl list;
+   dir: string
+>
+and plugins = (string, plugin_rpc) Hashtbl.t
 
 type json config_info = <
    name: string;
@@ -29,12 +36,13 @@ and config_passwd = <
    username: string
 >
 
+let m = Mutex.create ()
 let plugin_info_file = "LIFEDB_PLUGIN"
 let plugins = Hashtbl.create 1 
 
-let dispatch cgi arg =
-    (* initiate a new scan *)
-    ()
+
+let find_plugin name =
+    try Some (Hashtbl.find plugins name) with Not_found -> None
 
 let config_file_extension = ".conf"
 exception Plugin_not_found of (string * string)
@@ -88,5 +96,23 @@ let do_scan db =
         )
     ) (fun () -> Unix.closedir dh)
 
-let dispatch cgi args = 
-    ()
+let dispatch cgi = function
+   |`Get name ->
+       with_lock m (fun () ->
+           match find_plugin name with
+           |Some (pl,_) ->
+               cgi#output#output_string (Json_io.string_of_json (json_of_plugin_info pl))
+           |None ->
+               Lifedb_rpc.return_error cgi `Not_found "Plugin error" "Plugin not found"
+       )
+   |`List ->
+       with_lock m (fun () ->
+           let h = Hashtbl.create 1 in
+           Hashtbl.iter (fun k (v,dir) -> Hashtbl.add h k (object 
+               method name=k method cmd=v#cmd method declares=v#declares method dir=dir
+             end)) plugins;
+           cgi#output#output_string (Json_io.string_of_json (json_of_plugins h))
+       )
+   |`Scan ->
+       Db_thread_access.push Db_thread_access.Plugins
+
