@@ -54,13 +54,12 @@ let log_thread () =
     db#exec "create table if not exists
         task_log (id integer primary key autoincrement, name text, time_logged integer, time_taken integer, exit_code integer)";
     while true do
-        let l = with_lock m (fun () ->
+        with_lock m (fun () ->
             if Queue.is_empty q then begin
                Condition.wait c m
             end;
-            Queue.take q
-        ) in
-        log_request db l;
+            log_request db (Queue.take q);
+        )
     done
 
 let logmod m fmt =
