@@ -56,10 +56,10 @@ class client url username password =
       self#task n >>>= Rpc.Task.json_of_t
  
     method tasks =
-      get "task/_all" >>== Rpc.Task.ts_of_json
+      get "task/_all" >>== Rpc.Task.rs_of_json
 
     method debug_tasks = 
-      self#tasks >>>= Rpc.Task.json_of_ts
+      self#tasks >>>= Rpc.Task.json_of_rs
 
     method plugin n =
       get ("plugin/"^n) >>== Rpc.Plugin.t_of_json
