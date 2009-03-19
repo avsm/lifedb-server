@@ -45,7 +45,9 @@ stop:
 
 .PHONY: test
 test:
-	cd client/python && $(PYTHON) setup.py test
+	cd client/python && \
+	env LIFEDB_TEST_USERNAME=root LIFEDB_TEST_PASSWORD=`../../get_passphrase.sh` \
+	$(PYTHON) setup.py test
 
 .PHONY: scripts
 scripts:
