@@ -74,7 +74,7 @@ class client url username password =
       self#plugins >>>= Rpc.Plugin.json_of_ts
    
     method plugins_scan =
-      ignore(post_raw "scan" "{}")
+      ignore(post_raw "plugin/_scan" "{}")
 
     method config = get "config"
     method debug_config = debug (get "config")

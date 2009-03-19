@@ -18,13 +18,13 @@ let m = Mutex.create ()
 let c = Condition.create ()
 
 let string_of_scan_request = function
-    |`Plugins, _ -> "plugins"
-    |`Lifedb, _ -> "lifedb"
-    |`Tasks, _ -> "tasks"
+    |`Plugins -> "plugins"
+    |`Lifedb -> "lifedb"
+    |`Tasks -> "tasks"
 
 let dump_q () =
     printf "DB Queue: [";
-    Queue.iter (fun i -> printf "%s " (string_of_scan_request i)) q;
+    Queue.iter (fun (i,_) -> printf "%s " (string_of_scan_request i)) q;
     printf "]\n%!"
 
 let push ?(copt=(None:Condition.t option)) (req:scan_request) =

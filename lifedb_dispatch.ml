@@ -30,9 +30,6 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                Lifedb_static.serve_config cgi url_list
             |(`HEAD|`GET), "ping" ->
                 cgi#output#output_string "pong";
-            |`POST, "scan" ->
-               let _ = mark_post_rpc cgi in
-               Lifedb_plugin.dispatch cgi `Scan
             |`POST, "mirror" -> begin
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg
@@ -58,6 +55,12 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                Lifedb_plugin.dispatch cgi (match tasksel with
                |"_all" -> `List
                |name ->  `Get name)
+            |`POST, "plugin" ->
+               let tasksel = if List.length url_list < 2 then "_scan" else List.nth url_list 1 in
+               ignore(mark_post_rpc cgi);
+               (match tasksel with
+               |"_scan" -> Lifedb_plugin.dispatch cgi `Scan
+               |_ -> return_error cgi `Not_found "Unknown plugin request" "Only _scan is valid")
             |`POST, "passwd_create" -> begin
                let arg = mark_post_rpc cgi in
                Lifedb_passwd.dispatch cgi (`Store arg)
