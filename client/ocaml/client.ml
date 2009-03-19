@@ -90,6 +90,14 @@ class client url username password =
 
   in
   let get frag = process http_get_message frag in
+  let post_raw frag body =
+     process (fun uri ->
+       http_post_raw_message ~callfn:(fun p ->
+          let rh = p#request_header `Base in
+          rh#update_field "content-type" "application/json";
+          p#set_request_header rh)
+        uri body
+     ) frag in
   let debug = function
      |Some x -> print_endline (sprintf "http success: %s" x)
      |None -> print_endline (sprintf "http fail") in
@@ -126,6 +134,8 @@ class client url username password =
     method debug_plugins =
       self#plugins >>>= Rpc.Plugin.json_of_ts
    
+    method plugins_scan =
+      ignore(post_raw "scan" "{}")
 
     method config = get "config"
     method debug_config = debug (get "config")
