@@ -95,7 +95,7 @@ let destroy t =
    let _ = match !(t.status) with
    |Running pid -> kill pid Sys.sigterm
    |_ -> () in
-   let () = match t.thread with |Some t -> Thread.join t |None -> () in
+   (* let () = match t.thread with |Some t -> Thread.join t |None -> () in *)
    !(t.status)
 
 let system cmd env cwd =
