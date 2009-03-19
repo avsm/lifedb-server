@@ -13,7 +13,8 @@ export OCAMLRUNPARAM
 PLATFORM=macos
 
 USE_CAMLP4 := yes
-SOURCES= custom_unix_stubs.c fork_helper.ml platform.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
+SOURCES= client/ocaml/lifedb.ml \
+	custom_unix_stubs.c fork_helper.ml platform.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
 	passwords.ml  \
 	sql_mtype_map.ml sql_mirror.ml \
 	lifedb_rpc.ml \

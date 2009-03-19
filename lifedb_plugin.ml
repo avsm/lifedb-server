@@ -3,25 +3,6 @@
 open Utils
 open Printf
 
-type json plugin_info = <
-   name : string;
-   cmd : string;
-   declares: plugin_decl list
->
-and plugin_decl = <
-   pltype : string;
-   description : string;
-   implements : string;
-   ?icon : string option
->
-and plugin_rpc = <
-   name: string;
-   cmd: string;
-   declares: plugin_decl list;
-   dir: string
->
-and plugins = (string, plugin_rpc) Hashtbl.t
-
 let m = Mutex.create ()
 let plugin_info_file = "LIFEDB_PLUGIN"
 let plugins = Hashtbl.create 1 
@@ -30,11 +11,12 @@ let find_plugin name =
     try Some (Hashtbl.find plugins name) with Not_found -> None
 
 let scan_plugin_dir db plugin_dir plugin_info_file =
-    let info = plugin_info_of_json (Json_io.load_json plugin_info_file) in
+    let info = Lifedb.Rpc.Plugin.t_of_json (Json_io.load_json plugin_info_file) in
     Log.logmod "Plugins" "registering %s (%s)" info#name 
        (String.concat ", " (List.map (fun x -> x#pltype) info#declares));
     List.iter (Sql_mtype_map.update db plugin_dir) info#declares;
-    Hashtbl.add plugins info#name (info, plugin_dir)
+    let r = object method info=info method dir=plugin_dir end in
+    Hashtbl.add plugins info#name r
 
 let do_scan db =
     Hashtbl.clear plugins;
@@ -57,18 +39,14 @@ let dispatch cgi = function
    |`Get name ->
        with_lock m (fun () ->
            match find_plugin name with
-           |Some (pl,_) ->
-               cgi#output#output_string (Json_io.string_of_json (json_of_plugin_info pl))
+           |Some r ->
+               cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_r r))
            |None ->
                Lifedb_rpc.return_error cgi `Not_found "Plugin error" "Plugin not found"
        )
    |`List ->
        with_lock m (fun () ->
-           let h = Hashtbl.create 1 in
-           Hashtbl.iter (fun k (v,dir) -> Hashtbl.add h k (object 
-               method name=k method cmd=v#cmd method declares=v#declares method dir=dir
-             end)) plugins;
-           cgi#output#output_string (Json_io.string_of_json (json_of_plugins h))
+           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_ts plugins))
        )
    |`Scan ->
        Db_thread_access.push_sync `Plugins

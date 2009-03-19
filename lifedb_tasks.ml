@@ -9,27 +9,6 @@ exception Internal_task_error of string
 
 let m = Mutex.create ()
 
-module Task = struct
-  type json t = <
-      plugin: string;
-      mode: string;
-      silo: string;
-      ?period: int option;
-      ?secret: passwd option;
-      ?args: (string, string) Hashtbl.t option
-    >
-  and passwd = <
-      service: string;
-      username: string
-    >
-  and r = <
-      info: t;
-      duration: float;  (* time the task has been running, float seconds *)
-      ?pid: int option
-    >
-  and rs = (string,r) Hashtbl.t
-end
-
 type task_mode = 
    |Periodic of int
    |Single 
@@ -54,14 +33,14 @@ let task_table_limit = 10
 let task_poll_period = ref 120.
 let task_throttle () = Thread.delay 0.1
 
-let json_of_task name t : Task.r =
+let json_of_task name t : Lifedb.Rpc.Task.r =
    let mode,period = match t.mode with
    |Periodic p -> "periodic", (Some p)
    |Single -> "single", None
    |Constant -> "constant", None in
    let secret = match t.secret with |None -> None
       |Some (s,u) -> Some (object method service=s method username=u end) in
-   let info : Task.t = object
+   let info : Lifedb.Rpc.Task.t = object
        method plugin=t.plugin
        method mode=mode
        method period=period
@@ -130,7 +109,7 @@ let run_command name cmd cwd secret args silo =
     task_throttle ();
     task, (Some outfd), (Some errfd)
 
-let create_task task_name (p:Task.t)  =
+let create_task task_name (p:Lifedb.Rpc.Task.t)  =
     assert(not (Mutex.try_lock m));
     if Hashtbl.length task_list >= task_table_limit then
        raise (Task_error "too many tasks already registered");
@@ -138,7 +117,7 @@ let create_task task_name (p:Task.t)  =
        raise (Task_error "task name cant contain . or /");
     let pl,cwd = match Lifedb_plugin.find_plugin p#plugin with
       |None -> raise (Task_error (sprintf "plugin %s not found" p#plugin))
-      |Some x -> x in
+      |Some x -> x#info, x#dir in
     let mode = match String.lowercase p#mode, p#period with
       |"periodic", (Some p) -> Periodic p
       |"single",_ -> Single
@@ -154,7 +133,7 @@ let create_task task_name (p:Task.t)  =
     Hashtbl.add task_list task_name task;
     Log.logmod "Tasks" "Created task '%s' %s" task_name (string_of_task task)
 
-let find_or_create_task name (t:Task.t) =
+let find_or_create_task name (t:Lifedb.Rpc.Task.t) =
     match find_task name with
     |Some _ -> ()
     |None -> create_task name t
@@ -235,7 +214,7 @@ let task_sweep () =
 
 let dispatch cgi = function
    |`Create (name,p) ->
-       let params = Task.t_of_json (Json_io.json_of_string p) in
+       let params = Lifedb.Rpc.Task.t_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
            match find_task name with
            |Some state ->
@@ -252,7 +231,7 @@ let dispatch cgi = function
        with_lock m (fun () ->
            match find_task name with
            |Some state ->
-               cgi#output#output_string (Json_io.string_of_json (Task.json_of_r (json_of_task name state)))
+               cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Task.json_of_r (json_of_task name state)))
            |None ->
                Lifedb_rpc.return_error cgi `Not_found "Task error" "Task not found"
        )
@@ -260,7 +239,7 @@ let dispatch cgi = function
        with_lock m (fun () ->
            let resp = Hashtbl.create 1 in
            Hashtbl.iter (fun name state -> Hashtbl.add resp name (json_of_task name state)) task_list;
-           cgi#output#output_string (Json_io.string_of_json (Task.json_of_rs resp))
+           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Task.json_of_rs resp))
        )
    |`Destroy name ->
        with_lock m (fun () ->
@@ -295,13 +274,13 @@ let task_regular_kick () =
 let config_file_extension = ".conf"
 let scan_config_file config_file =
     Log.logmod "Tasks" "Scanning config file %s" config_file;
-    let task = Task.t_of_json (Json_io.load_json config_file) in
+    let task = Lifedb.Rpc.Task.t_of_json (Json_io.load_json config_file) in
     let task_name = Filename.chop_suffix (Filename.basename config_file) config_file_extension  in
     match Lifedb_plugin.find_plugin task#plugin with
       |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task_name;
-      |Some (plugin, plugin_dir) ->
+      |Some _ ->
         Log.logmod "Tasks" "Added '%s' (plugin %s)" task_name task#plugin;
-        let task : Task.t = object
+        let task : Lifedb.Rpc.Task.t = object
           method plugin=task#plugin
           method mode=task#mode
           method period=task#period

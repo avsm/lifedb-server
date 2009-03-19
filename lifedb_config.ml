@@ -2,15 +2,6 @@
 
 open Utils
 
-type json config = <
-    lifedb_directory: string;
-    config_directory: string;
-    plugins_directory: string list;
-    log_directory: string;
-    cache_directory: string;
-    test_mode: bool
->
-
 module Dir = struct
     let lifedb_dir = ref "" 
     let cache_dir = ref ""
@@ -37,7 +28,7 @@ let root_user () = "root"
 
 let read_config file =
     let json = Json_io.load_json file in
-    let conf = config_of_json json in
+    let conf = Lifedb.Rpc.Config.t_of_json json in
     let subst = Str.global_substitute (Str.regexp_string "$HOME") (fun _ -> Sys.getenv("HOME")) in
     Dir.lifedb_dir := subst conf#lifedb_directory;
     Dir.plugins_dir := List.map subst conf#plugins_directory;
@@ -48,7 +39,7 @@ let read_config file =
     config_filename_val := realpath file
 
 let string_of_config () =
-    let json = json_of_config (object
+    let json = Lifedb.Rpc.Config.json_of_t (object
        method lifedb_directory = Dir.lifedb ()
        method plugins_directory = Dir.plugins ()
        method log_directory = Dir.log ()
