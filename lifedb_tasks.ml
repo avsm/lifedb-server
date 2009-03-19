@@ -178,7 +178,7 @@ let delete_task name =
         let time_taken = (Unix.gettimeofday ()) -. task.start_time in
         let exit_code = Fork_helper.exit_code_of_task task.running in
         Log.push (`Plugin (name, time_taken, exit_code));
-        Db_thread_access.push Db_thread_access.Lifedb
+        Db_thread_access.push (Db_thread_access.Lifedb None)
     |None -> ()
 
 let destroy_task name =

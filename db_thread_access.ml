@@ -8,16 +8,16 @@ open Utils
 open Printf
 
 type scan_request = 
-   |Plugins
-   |Lifedb
+   |Plugins of Condition.t option
+   |Lifedb of Condition.t option
 
 let q = Queue.create ()
 let m = Mutex.create ()
 let c = Condition.create ()
 
 let string_of_scan_request = function
-    |Plugins -> "plugins"
-    |Lifedb -> "lifedb"
+    |Plugins _ -> "plugins"
+    |Lifedb _ -> "lifedb"
 
 let dump_q () =
     printf "DB Queue: [";

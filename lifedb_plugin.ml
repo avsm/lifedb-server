@@ -114,5 +114,8 @@ let dispatch cgi = function
            cgi#output#output_string (Json_io.string_of_json (json_of_plugins h))
        )
    |`Scan ->
-       Db_thread_access.push Db_thread_access.Plugins
+       let c = Condition.create () in
+       let m' = Mutex.create () in
+       Db_thread_access.push (Db_thread_access.Plugins (Some c));
+       Condition.wait c m'
 

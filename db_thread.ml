@@ -6,6 +6,10 @@ open Utils
 open Printf
 open Db_thread_access
 
+let maybe_signal = function
+    |None -> ()
+    |Some c -> Condition.signal c
+
 let db_thread () = 
     let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db()) in
     Sql_mirror.init db;
@@ -17,8 +21,8 @@ let db_thread () =
             Queue.take q
         ) in
         match task with
-        |Lifedb -> Sql_mirror.do_scan db
-        |Plugins -> Lifedb_plugin.do_scan db
+        |Lifedb copt -> Sql_mirror.do_scan db; maybe_signal copt
+        |Plugins copt -> Lifedb_plugin.do_scan db; maybe_signal copt
     done
 
 let start () =

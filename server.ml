@@ -72,7 +72,7 @@ let start() =
   Random.self_init ();
   
   Db_thread.start ();
-  Db_thread_access.push Db_thread_access.Plugins;
+  Db_thread_access.push (Db_thread_access.Plugins None);
   Netplex_main.startup
     (Netplex_mt.mt ())
     Netplex_log.logger_factories   (* allow all built-in logging styles *)
