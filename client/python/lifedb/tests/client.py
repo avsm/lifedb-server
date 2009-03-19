@@ -14,6 +14,8 @@ import time
 import tempfile
 
 from lifedb import client
+import httplib2
+httplib2.debuglevel = 0
 
 class BaseTestCase(unittest.TestCase):
     def setUp(self):
@@ -45,11 +47,9 @@ class BasicFailTestCase(LoginBadTestCase):
         
 class TasksPassTestCase(LoginOKTestCase):
     def test_task_create(self):
-        self.server.task_create("foo","single","echo hello")
+        self.server.task_create("foo","Dummy","single","dummy", args={'WANTSLEEP':'100'})
         tasks = self.server.task_list()
         self.assert_('foo' in tasks)
-        self.assertEquals(tasks['foo']['cmd'], 'echo hello')
-        self.assertEquals(tasks['foo']['mode'], 'single')
         self.destroy_and_check("foo")
 
     def destroy_and_check(self, name):
@@ -60,34 +60,31 @@ class TasksPassTestCase(LoginOKTestCase):
     def long_test_task_periodic_create(self):
         period=3
         tmp = tempfile.NamedTemporaryFile()
+        args = { 'TMPFILELOC' : tmp.name }
         cmd="echo foo >> %s" % tmp.name
-        self.server.task_create("bar","periodic",cmd,period=period)
-        self.server.task_create("bar2","periodic","echo hello",period=1)
+        self.server.task_create("bar","Dummy","periodic","",period=period, args=args)
         tasks = self.server.task_list()
         self.assert_('bar' in tasks)
-        self.assertEquals(tasks['bar']['mode'], 'periodic')
-        self.assertEquals(tasks['bar']['cmd'], cmd)
-        self.assertEquals(tasks['bar']['period'], period)
         time.sleep(period*4+1)
         self.destroy_and_check("bar")
-        self.destroy_and_check("bar2")
         f = open(tmp.name, 'r')
         lines = map(str.strip, f.readlines())
         f.close()
         tmp.close()
+        print lines
         self.assertEquals(lines,['foo','foo','foo','foo'])
 
     def test_task_constant_create(self):
-        self.server.task_create("foo","constant","echo daemon")
+        self.server.task_create("foo","Dummy","constant","",args={'WANTSLEEP':'100'})
         tasks = self.server.task_list()
         self.assert_('foo' in tasks)
-        self.assertEquals(tasks['foo']['mode'], 'constant')
+        self.assertEquals(tasks['foo']['info']['mode'], 'constant')
         self.destroy_and_check('foo')
 
     def test_task_get(self):
-        self.server.task_create("xxx","single", "sleep 10000")
+        self.server.task_create("xxx", "Dummy", "single", "", args={'WANTSLEEP':'50'})
         task = self.server.task_get("xxx")
-        self.assertEquals(task['cmd'], 'sleep 10000')
+        self.assertEquals(task['info']['plugin'], 'Dummy')
         self.destroy_and_check('xxx')
 
     def test_task_negative_get(self):
@@ -95,29 +92,29 @@ class TasksPassTestCase(LoginOKTestCase):
 
     def test_task_create_invalid(self):
         self.assertRaises(client.ServerError, self.server.task_create, 
-            'invalid', 'xxx', 'echo whatever')
+            'invalid', 'xxx', 'yyy', '')
         
     def long_test_task_overload(self):
         max_tasks = 10
         for t in range(max_tasks):
-            self.server.task_create("foo%d" % t, "single", "sleep 10000%d" % t)
+            self.server.task_create("foo%d" % t, "Dummy", "single","", args={'WANTSLEEP':'100000'}) 
         for t in range(5):
             self.assertRaises(client.ServerError, self.server.task_create, 
-                "bar", "single", "echo fail")
+                "bar", "Dummy", "single", "")
         for t in range(max_tasks):
             self.server.task_destroy("foo%d" % t)
 
     def very_long_test_task_fd_leak(self):
         for t in range(2000):
-           self.server.task_create("foo", "single", "echo foo %s" % t)
-           self.server.task_create("bar", "single", "false")
+           self.server.task_create("foo", "Dummy", "single", "", args={'WANTSLEEP':'100'})
+           self.server.task_create("bar", "Dummy", "single", "", args={'WANTSLEEP':'100'})
            self.server.task_destroy("foo")
            self.server.task_destroy("bar")
 
 class TasksFailTestCase(LoginBadTestCase):
     def test_task_create_not_logged_in(self):
         self.assertRaises(client.ResourceForbidden, self.server.task_create, 
-             "foo", "single", "echo hello")
+             "foo", "Dummy", "single", "")
     
     def test_task_get_not_logged_in(self):
         self.assertRaises(client.ResourceForbidden, self.server.task_get, "nonexistent")
@@ -147,7 +144,8 @@ def suite():
     suite.addTest(unittest.makeSuite(BasicFailTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksPassTestCase, 'test'))
     suite.addTest(unittest.makeSuite(TasksFailTestCase, 'test'))
-    #suite.addTest(unittest.makeSuite(TasksPassTestCase, 'long_test'))
+    suite.addTest(unittest.makeSuite(TasksPassTestCase, 'long_test'))
+    #suite.addTest(unittest.makeSuite(TasksPassTestCase, 'very_long_test'))
     return suite
 
 if __name__ == '__main__':

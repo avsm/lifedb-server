@@ -110,15 +110,19 @@ class Server(object):
         resp, data = self.resource.get(path='/ping')
         return data
        
-    def task_create(self, name, mode, cmd, period=None):
-        args = { 'name':name, 'mode':mode, 'cmd':cmd, 'period':period }
+    def task_create(self, name, plugin, mode, silo, period=None, secret=None, args=None):
+        a = { 'plugin':plugin, 'mode':mode, 'silo':silo }
+        if secret:
+           a['secret'] = {'service':secret[0], 'username':secret[1]}
         if period:
-           args['period'] = period
-        resp, data = self.resource.post(path='/task_create', content = args)
+           a['period'] = period
+        if args:
+           a['args'] = args
+        resp, data = self.resource.post(path=uri('/task/', name), content = a)
         return data
 
     def task_destroy(self, name):
-        resp, data = self.resource.post(path='/task_destroy', content = { 'name':name })
+        resp, data = self.resource.delete(path=uri('/task/', name))
         return data
 
     def task_list(self):
