@@ -61,7 +61,8 @@ let start() =
     } in
   let config_cgi = { Netcgi1_compat.Netcgi_env.default_config with
           Netcgi1_compat.Netcgi_env.permitted_input_content_types = 
-            [ "application/json"; "application/x-www-form-urlencoded" ]
+            [ "application/json"; "application/x-www-form-urlencoded" ];
+          permitted_http_methods = ["GET";"HEAD";"POST";"DELETE"]
   } in
   
   let nethttpd_factory = 

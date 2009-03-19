@@ -5,11 +5,13 @@ open Lifedb_rpc
 let mark_post_rpc (cgi : Netcgi.cgi_activation) =
     let args = cgi#arguments in
     cgi#set_header ~cache:`No_cache ~content_type:"application/json" ();
-    if List.length args != 1 then raise (Invalid_rpc "arguments != 1");
-    (List.hd args)#value
+    if List.length args != 1 then "{}" else (List.hd args)#value
 
 let mark_get_rpc (cgi : Netcgi.cgi_activation) =
     cgi#set_header ~cache:`No_cache ~content_type:"application/json" ()
+
+let mark_delete_rpc (cgi : Netcgi.cgi_activation) =
+    cgi#set_header ~cache:`No_cache ()
 
 let dispatch (cgi : Netcgi.cgi_activation) =
     let u = Nethttp.uripath_decode (cgi#url ()) in
@@ -35,13 +37,15 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg
             end
-            |`POST, "task_create" -> begin
+            |`POST, "task" -> begin
                let arg = mark_post_rpc cgi in
-               Lifedb_tasks.dispatch cgi (`Create arg)
+               let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               Lifedb_tasks.dispatch cgi (`Create (name,arg))
             end
-            |`POST, "task_destroy" -> 
-               let arg = mark_post_rpc cgi in
-               Lifedb_tasks.dispatch cgi (`Destroy arg)
+            |`DELETE, "task" ->
+               mark_delete_rpc cgi;
+               let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               Lifedb_tasks.dispatch cgi (`Destroy name)
             |`GET, "task" ->
                let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
                mark_get_rpc cgi;

@@ -26,7 +26,6 @@ let m = Mutex.create ()
 let plugin_info_file = "LIFEDB_PLUGIN"
 let plugins = Hashtbl.create 1 
 
-
 let find_plugin name =
     try Some (Hashtbl.find plugins name) with Not_found -> None
 

@@ -9,49 +9,26 @@ exception Internal_task_error of string
 
 let m = Mutex.create ()
 
-type json rpc_task_create = <
-   name: string;
-   plugin: string;
-   cmd: string;
-   mode: string;
-   silo: string;
-   ?cwd: string option;
-   ?period: int option;
-   ?secret: task_passwd option;
-   ?args: (string, string) Hashtbl.t option
->
-and task_passwd = <
-   service: string;
-   username: string
->
-and rpc_task_destroy = <
-   name: string
->
-and rpc_task = <
-   cmd: string;
-   mode: string;
-   silo: string;
-   ?period: int option;
-   duration: float;
-   ?pid: int option;
-   ?secret: task_passwd option;
-   ?args: (string , string) Hashtbl.t option
->
-and rpc_task_list = (string,rpc_task) Hashtbl.t
-
-type json config_info = <
-   name: string;
-   plugin: string;
-   mode: string;
-   silo: string;
-   ?period: int option;
-   ?secret: config_passwd option;
-   ?args: (string , string) Hashtbl.t option
->
-and config_passwd = <
-   service: string;
-   username: string
->
+module Task = struct
+  type json t = <
+      plugin: string;
+      mode: string;
+      silo: string;
+      ?period: int option;
+      ?secret: passwd option;
+      ?args: (string, string) Hashtbl.t option
+    >
+  and passwd = <
+      service: string;
+      username: string
+    >
+  and r = <
+      info: t;
+      duration: float;  (* time the task has been running, float seconds *)
+      ?pid: int option
+    >
+  and rs = (string,r) Hashtbl.t
+end
 
 type task_mode = 
    |Periodic of int
@@ -61,6 +38,7 @@ type task_mode =
 type task_state = {
    cmd: string;
    mode: task_mode;
+   plugin: string;
    cwd: string;
    start_time: float; 
    silo: string;
@@ -74,25 +52,27 @@ type task_state = {
 let task_list = Hashtbl.create 1
 let task_table_limit = 10
 let task_poll_period = ref 120.
-let task_throttle () = Thread.delay 1.
+let task_throttle () = Thread.delay 0.1
 
-let json_of_task t =
+let json_of_task name t : Task.r =
    let mode,period = match t.mode with
    |Periodic p -> "periodic", (Some p)
    |Single -> "single", None
    |Constant -> "constant", None in
-   let pid = Fork_helper.pid_of_task t.running in
    let secret = match t.secret with |None -> None
       |Some (s,u) -> Some (object method service=s method username=u end) in
-   object
-       method cmd=t.cmd
+   let info : Task.t = object
+       method plugin=t.plugin
        method mode=mode
        method period=period
-       method pid=pid
        method secret=secret 
        method args=t.args
        method silo=t.silo
+   end in
+   object
+       method info=info
        method duration=Unix.gettimeofday () -. t.start_time
+       method pid=Fork_helper.pid_of_task t.running
    end
  
 let string_of_task t =
@@ -115,6 +95,7 @@ let find_task name =
        Not_found -> None
 
 let run_command name cmd cwd secret args silo =
+    assert(not (Mutex.try_lock m));
     Log.logmod "Tasks" "Executing command '%s' (%s)" name cmd;
     let env = match secret with |None -> [||] 
       |Some (s,u) -> begin
@@ -149,35 +130,39 @@ let run_command name cmd cwd secret args silo =
     task_throttle ();
     task, (Some outfd), (Some errfd)
 
-let create_task params =
+let create_task task_name (p:Task.t)  =
+    assert(not (Mutex.try_lock m));
     if Hashtbl.length task_list >= task_table_limit then
        raise (Task_error "too many tasks already registered");
-    if String.contains params#name '.' || (String.contains params#name '/') then
+    if String.contains task_name '.' || (String.contains task_name '/') then
        raise (Task_error "task name cant contain . or /");
-    let mode = match String.lowercase params#mode, params#period with
-    |"periodic", (Some p) -> Periodic p
-    |"single",_ -> Single
-    |"constant",_ -> Constant
-    |_,_ -> raise (Task_error "unknown task mode") in
-    let cwd = match params#cwd with
-    |Some c -> c  |None -> "/" in
-    let secret = match params#secret with 
-      |None -> None |Some s -> Some (s#service, s#username) in
-    let task_status, outfd, errfd = run_command params#name params#cmd cwd secret params#args params#silo in
+    let pl,cwd = match Lifedb_plugin.find_plugin p#plugin with
+      |None -> raise (Task_error (sprintf "plugin %s not found" p#plugin))
+      |Some x -> x in
+    let mode = match String.lowercase p#mode, p#period with
+      |"periodic", (Some p) -> Periodic p
+      |"single",_ -> Single
+      |"constant",_ -> Constant
+      |_,_ -> raise (Task_error "unknown task mode") in
+    let secret = match p#secret with 
+      |None -> None
+      |Some s -> Some (s#service, s#username) in
+    let task_status, outfd, errfd = run_command task_name pl#cmd cwd secret p#args p#silo in
     let now_time = Unix.gettimeofday () in 
-    let task = { cmd=params#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; silo=params#silo;
-       secret=secret; start_time=now_time; running=task_status; args=params#args } in
-    Hashtbl.add task_list params#name task;
-    Log.logmod "Tasks" "Created task '%s' %s" params#name (string_of_task task)
+    let task = { cmd=pl#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; silo=p#silo;
+       plugin=pl#name; secret=secret; start_time=now_time; running=task_status; args=p#args } in
+    Hashtbl.add task_list task_name task;
+    Log.logmod "Tasks" "Created task '%s' %s" task_name (string_of_task task)
 
-let find_or_create_task params =
-    match find_task params#name with
+let find_or_create_task name (t:Task.t) =
+    match find_task name with
     |Some _ -> ()
-    |None -> create_task params
+    |None -> create_task name t
 
 (* remove the task entry from the hashtable and close
    any logging fds *)
 let delete_task name =
+    assert(not (Mutex.try_lock m));
     let closeopt task = function
     |None -> ()
     |Some fd ->
@@ -197,6 +182,7 @@ let delete_task name =
     |None -> ()
 
 let destroy_task name =
+    assert(not (Mutex.try_lock m));
     match find_task name with
     |Some task -> begin
         let final_status = Fork_helper.destroy task.running in
@@ -214,13 +200,13 @@ let reschedule_task name task =
          let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret task.args task.silo in
          let now_time = Unix.gettimeofday () in
          let task = { cmd=task.cmd; outfd=outfd; secret=task.secret; args=task.args; silo=task.silo;
-            errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status } in
+            errfd=errfd; mode=Constant; cwd=task.cwd; start_time=now_time; running=task_status; plugin=task.plugin } in
          Hashtbl.add task_list name task
     |Periodic p ->
          let start_time = Unix.gettimeofday () +. (float p) in
          let task_status = Fork_helper.blank_task () in
          let task = { cmd=task.cmd; mode=Periodic p; secret=task.secret; args=task.args; silo=task.silo;
-           outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status } in
+           outfd=None; errfd=None; cwd=task.cwd; start_time=start_time; running=task_status; plugin=task.plugin } in
          Hashtbl.add task_list name task;
          Log.logmod "Tasks" "scheduling %s: %s" name (Fork_helper.string_of_task task_status)
 
@@ -248,15 +234,15 @@ let task_sweep () =
     ) task_list
 
 let dispatch cgi = function
-   |`Create p ->
-       let params = rpc_task_create_of_json (Json_io.json_of_string p) in
+   |`Create (name,p) ->
+       let params = Task.t_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
-           match find_task params#name with
+           match find_task name with
            |Some state ->
                Lifedb_rpc.return_error cgi `Bad_request "Task already exists" "Use a different id"
            |None -> begin
                try
-                 create_task params
+                 create_task name params
                with
                |Task_error err ->
                   Lifedb_rpc.return_error cgi `Bad_request "Task error" err
@@ -266,21 +252,20 @@ let dispatch cgi = function
        with_lock m (fun () ->
            match find_task name with
            |Some state ->
-               cgi#output#output_string (Json_io.string_of_json (json_of_rpc_task (json_of_task state)))
+               cgi#output#output_string (Json_io.string_of_json (Task.json_of_r (json_of_task name state)))
            |None ->
                Lifedb_rpc.return_error cgi `Not_found "Task error" "Task not found"
        )
    |`List ->
        with_lock m (fun () ->
            let resp = Hashtbl.create 1 in
-           Hashtbl.iter (fun name state -> Hashtbl.add resp name (json_of_task state)) task_list;
-           cgi#output#output_string (Json_io.string_of_json (json_of_rpc_task_list resp))
+           Hashtbl.iter (fun name state -> Hashtbl.add resp name (json_of_task name state)) task_list;
+           cgi#output#output_string (Json_io.string_of_json (Task.json_of_rs resp))
        )
-   |`Destroy p ->
-       let params = rpc_task_destroy_of_json (Json_io.json_of_string p) in
+   |`Destroy name ->
        with_lock m (fun () ->
            try
-               destroy_task params#name
+               destroy_task name
            with |Task_error err ->
                Lifedb_rpc.return_error cgi `Bad_request "Task error" err
        )
@@ -310,22 +295,21 @@ let task_regular_kick () =
 let config_file_extension = ".conf"
 let scan_config_file config_file =
     Log.logmod "Tasks" "Scanning config file %s" config_file;
-    let task = config_info_of_json (Json_io.load_json config_file) in
+    let task = Task.t_of_json (Json_io.load_json config_file) in
+    let task_name = Filename.chop_suffix (Filename.basename config_file) config_file_extension  in
     match Lifedb_plugin.find_plugin task#plugin with
-      |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task#name
+      |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task_name;
       |Some (plugin, plugin_dir) ->
-        Log.logmod "Tasks" "Added '%s' (plugin %s)" task#name task#plugin;
-        let task = object
-          method name=task#name
-          method cmd=plugin#cmd
+        Log.logmod "Tasks" "Added '%s' (plugin %s)" task_name task#plugin;
+        let task : Task.t = object
+          method plugin=task#plugin
           method mode=task#mode
           method period=task#period
-          method cwd=Some plugin_dir
           method secret=task#secret
           method args=task#args
           method silo=task#silo
         end in
-        with_lock m (fun () -> find_or_create_task task)
+        with_lock m (fun () -> find_or_create_task task_name task)
 
 let do_scan () =
     let config_dir = Lifedb_config.Dir.config () in
