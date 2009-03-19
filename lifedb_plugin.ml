@@ -22,20 +22,6 @@ and plugin_rpc = <
 >
 and plugins = (string, plugin_rpc) Hashtbl.t
 
-type json config_info = <
-   name: string;
-   plugin: string;
-   mode: string;
-   silo: string;
-   ?period: int option;
-   ?secret: config_passwd option;
-   ?args: (string , string) Hashtbl.t option
->
-and config_passwd = <
-   service: string;
-   username: string
->
-
 let m = Mutex.create ()
 let plugin_info_file = "LIFEDB_PLUGIN"
 let plugins = Hashtbl.create 1 
@@ -43,25 +29,6 @@ let plugins = Hashtbl.create 1
 
 let find_plugin name =
     try Some (Hashtbl.find plugins name) with Not_found -> None
-
-let config_file_extension = ".conf"
-exception Plugin_not_found of (string * string)
-let scan_config_file db config_file =
-    Log.logmod "Plugins" "Scanning config file %s" config_file;
-    let task = config_info_of_json (Json_io.load_json config_file) in
-    let plugin, plugin_dir = try Hashtbl.find plugins task#plugin
-        with Not_found -> raise (Plugin_not_found (config_file, task#name)) in
-    let task = object 
-        method name=task#name
-        method cmd=plugin#cmd 
-        method mode=task#mode 
-        method period=task#period
-        method cwd=Some plugin_dir
-        method secret=task#secret
-        method args=task#args
-        method silo=task#silo
-    end in
-    with_lock Lifedb_tasks.m (fun () -> Lifedb_tasks.find_or_create_task task)
 
 let scan_plugin_dir db plugin_dir plugin_info_file =
     let info = plugin_info_of_json (Json_io.load_json plugin_info_file) in
@@ -85,16 +52,7 @@ let do_scan db =
                 ) 
             ) (fun () -> Unix.closedir dh);
         with Unix.Unix_error _ -> Log.logmod "Plugins" "Skipping directory: %s" dir
-    ) (Lifedb_config.Dir.plugins ());
-    let config_dir = Lifedb_config.Dir.config () in
-    let dh = Unix.opendir config_dir in
-    try_final (fun () ->
-        repeat_until_eof (fun () ->
-           let next_entry = Unix.readdir dh in
-           if Filename.check_suffix next_entry config_file_extension then
-              scan_config_file db (Filename.concat config_dir next_entry)
-        )
-    ) (fun () -> Unix.closedir dh)
+    ) (Lifedb_config.Dir.plugins ())
 
 let dispatch cgi = function
    |`Get name ->
@@ -114,8 +72,5 @@ let dispatch cgi = function
            cgi#output#output_string (Json_io.string_of_json (json_of_plugins h))
        )
    |`Scan ->
-       let c = Condition.create () in
-       let m' = Mutex.create () in
-       Db_thread_access.push (Db_thread_access.Plugins (Some c));
-       Condition.wait c m'
+       Db_thread_access.push_sync `Plugins
 

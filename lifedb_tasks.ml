@@ -11,6 +11,7 @@ let m = Mutex.create ()
 
 type json rpc_task_create = <
    name: string;
+   plugin: string;
    cmd: string;
    mode: string;
    silo: string;
@@ -37,6 +38,20 @@ and rpc_task = <
    ?args: (string , string) Hashtbl.t option
 >
 and rpc_task_list = (string,rpc_task) Hashtbl.t
+
+type json config_info = <
+   name: string;
+   plugin: string;
+   mode: string;
+   silo: string;
+   ?period: int option;
+   ?secret: config_passwd option;
+   ?args: (string , string) Hashtbl.t option
+>
+and config_passwd = <
+   service: string;
+   username: string
+>
 
 type task_mode = 
    |Periodic of int
@@ -178,7 +193,7 @@ let delete_task name =
         let time_taken = (Unix.gettimeofday ()) -. task.start_time in
         let exit_code = Fork_helper.exit_code_of_task task.running in
         Log.push (`Plugin (name, time_taken, exit_code));
-        Db_thread_access.push (Db_thread_access.Lifedb None)
+        Db_thread_access.push `Lifedb;
     |None -> ()
 
 let destroy_task name =
@@ -290,6 +305,38 @@ let task_regular_kick () =
         );
         Thread.delay !task_poll_period
     done
+
+(* scan the config directory and spawn tasks *)
+let config_file_extension = ".conf"
+let scan_config_file config_file =
+    Log.logmod "Tasks" "Scanning config file %s" config_file;
+    let task = config_info_of_json (Json_io.load_json config_file) in
+    match Lifedb_plugin.find_plugin task#plugin with
+      |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task#name
+      |Some (plugin, plugin_dir) ->
+        Log.logmod "Tasks" "Added '%s' (plugin %s)" task#name task#plugin;
+        let task = object
+          method name=task#name
+          method cmd=plugin#cmd
+          method mode=task#mode
+          method period=task#period
+          method cwd=Some plugin_dir
+          method secret=task#secret
+          method args=task#args
+          method silo=task#silo
+        end in
+        with_lock m (fun () -> find_or_create_task task)
+
+let do_scan () =
+    let config_dir = Lifedb_config.Dir.config () in
+    let dh = Unix.opendir config_dir in
+    try_final (fun () ->
+        repeat_until_eof (fun () ->
+           let next_entry = Unix.readdir dh in
+           if Filename.check_suffix next_entry config_file_extension then
+              scan_config_file (Filename.concat config_dir next_entry)
+        )
+    ) (fun () -> Unix.closedir dh)
 
 let init () =
     let _ = Thread.create task_thread () in
