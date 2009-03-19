@@ -1,5 +1,6 @@
 (*pp $PP *)
 
+open Lifedb
 open Http_client.Convenience
 open Printf
 
@@ -9,68 +10,6 @@ let repeat_until_eof fn =
    done
    with End_of_file -> ()
 
-
-module Rpc = struct
-
-  module Config = struct
-    type json t = <
-      lifedb_directory: string;
-      config_directory: string;
-      plugins_directory: string list;
-      log_directory: string;
-      cache_directory: string;
-      test_mode: bool
-    >
-  end
-
-  module Plugin = struct
-    type json t = <
-      name : string;
-      cmd : string;
-      declares: decl list;
-      dir: string
-      >
-    and decl = <
-      pltype : string;
-      description : string;
-      implements : string;
-      ?icon : string option
-    >
-    and ts = (string, t) Hashtbl.t
-    
-  end
-
-  module Task = struct
-    type json create = <
-     name: string;
-     cmd: string;
-     mode: string;
-     silo: string;
-     ?cwd: string option;
-     ?period: int option;
-     ?secret: passwd option;
-     ?args: (string, string) Hashtbl.t option
-    >
-    and passwd = <
-      service: string;
-      username: string
-    >
-    and destroy = <
-      name: string
-    >
-    and t = <
-     cmd: string;
-     mode: string;
-     silo: string;
-     duration: float;
-     ?period: int option;
-     ?pid: int option;
-     ?secret: passwd option;
-     ?args: (string , string) Hashtbl.t option
-    >
-    and ts = (string,t) Hashtbl.t
-  end
-end
 
 class client url username password =
   let uri frag = sprintf "http://%s:%s@%s/%s" username password url frag in

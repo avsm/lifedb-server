@@ -1,6 +1,6 @@
 OCAMLMAKEFILE=../../OCamlMakefile
 
-SOURCES=client.ml
+SOURCES=lifedb.ml client.ml
 PACKS=netclient json-static
 RESULT=lifedb
 
