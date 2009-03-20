@@ -14,8 +14,6 @@ let update db plugin_dir params =
          else t in
          Data.TEXT ft
     in
-    db#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, 
-        label text, icon text, implements text)";
     let gets = db#stmt "update_mtype_get" "select id from mtype_map where mtype=?" in
     db#transaction (fun () ->
         gets#bind1 mtype;

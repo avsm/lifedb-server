@@ -85,8 +85,7 @@ let process_lifeentry db mtypes rootdir fname =
   match lifedb_entry_type mtype_info.m_implements with
   |Contact -> begin
     (* Message is a contact *)
-    let stmt = db#stmt "contactsel" "select id from contacts where uid=?" in
-    (* XXX check mtime below and ignore if older than current *)
+    let stmt = db#stmt "contactsel" "select id,file_name from contacts where uid=?" in
     let maybe_text = function |Some x -> Sqlite3.Data.TEXT x |None -> Sqlite3.Data.NULL in
     let uid = match le._uid with 
     |Some x -> Sqlite3.Data.TEXT x |None -> failwith "need _uid field for a contact entry" in
@@ -105,10 +104,18 @@ let process_lifeentry db mtypes rootdir fname =
        let _ = stmt#step_once in
        stmt#column 0
     |_ ->
-       let rowid = stmt#column 0 in
-       let stmt = db#stmt "contactup" "update contacts set abrecord=?,first_name=?,last_name=? where id=?" in
-       stmt#bind [| abrecord; firstname; lastname; rowid |];
-       let _ = stmt#step_once in rowid
+       (* the contact does indeed exist, look for the mtime of the existing record *)
+       let existing_mtime = (lifeentry_of_json (Json_io.load_json ~big_int_mode:true (stmt#str_col 1)))._timestamp in
+       if existing_mtime < le._timestamp then begin
+         Log.logmod "Mirror" "existing mtime is older, so updating record";
+         let rowid = stmt#column 0 in
+         let stmt = db#stmt "contactup" "update contacts set abrecord=?,first_name=?,last_name=?,file_name=? where id=?" in
+         stmt#bind [| abrecord; firstname; lastname; (Sqlite3.Data.TEXT fname); rowid |];
+         let _ = stmt#step_once in rowid
+       end else begin
+         Log.logmod "Mirror" "newer contact in db, skipping record";
+         stmt#column 0
+       end
     in
     (* insert the various services in this contact into people fields *)
     let () = match le._services with
@@ -248,15 +255,17 @@ let init db =
        lifedb_to (lifedb_id integer, people_id integer, primary key(lifedb_id, people_id))";
   db#exec "create table if not exists
        contacts (id integer primary key autoincrement, file_name text, uid text, abrecord text, first_name text, last_name text)";
+  db#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, 
+       label text, icon text, implements text)";
   db#exec "create unique index if not exists contacts_uid on contacts(uid)";
   db#exec "create unique index if not exists contacts_filename on contacts(file_name)";
   db#exec "create table if not exists
        people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
   db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
-let do_scan db =
+let do_scan ?(subdir="") db =
   Log.logmod "Mirror" "Starting scan";
-  let lifedb_path = Lifedb_config.Dir.lifedb () in
+  let lifedb_path = Filename.concat (Lifedb_config.Dir.lifedb ()) subdir in
   let mtypes = get_all_mtypes db in
   if not (Lifedb_config.test_mode ()) then
       walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path);
