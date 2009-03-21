@@ -12,7 +12,8 @@ type json lifeentry = {
     ?_services: (string, string list) Hashtbl.t option;
     ?subject: string option;
     ?duration: int option;
-    ?text: string option
+    ?text: string option;
+    ?_att: string list option
 } and addr = (string * string) assoc
 
 open Unix
@@ -72,6 +73,41 @@ let get_all_mtypes db =
   );
   h
 
+(* to resolve an attachment, we look for an _att directory one level up, and keep
+   looking until we hit the root lifedb directory *)
+let resolve_attachments rootdir fname lifedbid db a =
+  (* normalize rootdir *)
+  let rootdir = Filename.dirname (Filename.concat rootdir "foo") in
+  let rec checkdir bdir =
+      Log.logmod "Att" "checkdir: %s" bdir;
+      let attfname = String.concat "/" [bdir; "_att"; a] in
+      if Sys.file_exists attfname then begin
+         (* look for entry in attachments table *)
+         let stmt = db#stmt "attsel" "select id from attachments where file_name=?" in
+         stmt#bind1 (Sqlite3.Data.TEXT attfname);
+         (match stmt#step_once with
+         |0 -> (* insert *)
+             let stmt = db#stmt "attins" "insert into attachments values(NULL,?,?)" in
+             stmt#bind2 (Sqlite3.Data.INT lifedbid) (Sqlite3.Data.TEXT fname);
+             let _ = stmt#step_once in ()
+         |_ -> (* update *)
+             let id = stmt#int_col 0 in
+             let stmt = db#stmt "attup" "update attachments set lifedb_id=?, file_name=? where id=?" in
+             let _ = stmt#step_once in ()
+         );
+         Some attfname
+      end else begin
+          if bdir = rootdir || (String.length bdir < 2) then
+              None
+          else begin
+             checkdir (Filename.dirname bdir)
+          end
+      end
+  in
+  match checkdir (Filename.dirname fname) with
+  |Some attfile -> Log.logmod "Att" "attfile found: %s %s" fname attfile
+  |None -> Log.logmod "Att" "attfile not found: %s" fname
+ 
 let process_lifeentry db mtypes rootdir fname = 
   let json = Json_io.load_json ~big_int_mode:true fname in
   let le = lifeentry_of_json json in
@@ -82,6 +118,8 @@ let process_lifeentry db mtypes rootdir fname =
        failwith (sprintf "unknown mtype %s (we have: %s)" le._type all_mtypes) 
     end
   in
+  (* resolve the attachments
+  (match le._att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname db) a); *)
   match lifedb_entry_type mtype_info.m_implements with
   |Contact -> begin
     (* Message is a contact *)
@@ -218,17 +256,19 @@ let process_directory db mtypes rootdir dir =
   closedir dh
   
 let dir_needs_update db dir =
-  let dir_mtime = Int64.of_float (Unix.stat dir).st_mtime in
-  let needs_update = ref (Some dir_mtime) in
-  let stmt = db#stmt "dircache" "select mtime from dircache where dir=?" in
-  stmt#bind1 (Sqlite3.Data.TEXT dir);
-  let () = match stmt#step_once with
-  |0 -> ()
-  |1 ->
-    let db_mtime = Int64.of_string (Sqlite3.Data.to_string (stmt#column 0)) in
-    if dir_mtime <= db_mtime then needs_update := None
-  |_ -> failwith "dup dircache entries" in
-  !needs_update
+  try
+    let dir_mtime = Int64.of_float (Unix.stat dir).st_mtime in
+    let needs_update = ref (Some dir_mtime) in
+    let stmt = db#stmt "dircache" "select mtime from dircache where dir=?" in
+    stmt#bind1 (Sqlite3.Data.TEXT dir);
+    let () = match stmt#step_once with
+    |0 -> ()
+    |1 ->
+      let db_mtime = Int64.of_string (Sqlite3.Data.to_string (stmt#column 0)) in
+      if dir_mtime <= db_mtime then needs_update := None
+    |_ -> failwith "dup dircache entries" in
+    !needs_update
+  with Unix.Unix_error _ -> None
 
 let dir_is_updated db dir mtime =
   let stmt = db#stmt "dircache_updated" "insert or replace into dircache values(?,?)" in
@@ -257,6 +297,7 @@ let init db =
        contacts (id integer primary key autoincrement, file_name text, uid text, abrecord text, first_name text, last_name text)";
   db#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, 
        label text, icon text, implements text)";
+  db#exec "create table if not exists attachments (id integer primary key autoincrement, lifedb_id integer, file_name text)";
   db#exec "create unique index if not exists contacts_uid on contacts(uid)";
   db#exec "create unique index if not exists contacts_filename on contacts(file_name)";
   db#exec "create table if not exists
