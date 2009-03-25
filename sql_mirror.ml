@@ -79,20 +79,21 @@ let resolve_attachments rootdir fname lifedbid db a =
   (* normalize rootdir *)
   let rootdir = Filename.dirname (Filename.concat rootdir "foo") in
   let rec checkdir bdir =
-      Log.logmod "Att" "checkdir: %s" bdir;
       let attfname = String.concat "/" [bdir; "_att"; a] in
       if Sys.file_exists attfname then begin
          (* look for entry in attachments table *)
          let stmt = db#stmt "attsel" "select id from attachments where file_name=?" in
-         stmt#bind1 (Sqlite3.Data.TEXT attfname);
+         let fname' = Sqlite3.Data.TEXT attfname in
+         stmt#bind1 fname'; 
          (match stmt#step_once with
          |0 -> (* insert *)
              let stmt = db#stmt "attins" "insert into attachments values(NULL,?,?)" in
-             stmt#bind2 (Sqlite3.Data.INT lifedbid) (Sqlite3.Data.TEXT fname);
+             stmt#bind2 lifedbid fname';
              let _ = stmt#step_once in ()
          |_ -> (* update *)
-             let id = stmt#int_col 0 in
+             let id = stmt#column 0 in
              let stmt = db#stmt "attup" "update attachments set lifedb_id=?, file_name=? where id=?" in
+             stmt#bind3 lifedbid fname' id;
              let _ = stmt#step_once in ()
          );
          Some attfname
@@ -104,9 +105,7 @@ let resolve_attachments rootdir fname lifedbid db a =
           end
       end
   in
-  match checkdir (Filename.dirname fname) with
-  |Some attfile -> Log.logmod "Att" "attfile found: %s %s" fname attfile
-  |None -> Log.logmod "Att" "attfile not found: %s" fname
+  ignore(checkdir (Filename.dirname fname))
  
 let process_lifeentry db mtypes rootdir fname = 
   let json = Json_io.load_json ~big_int_mode:true fname in
@@ -118,8 +117,6 @@ let process_lifeentry db mtypes rootdir fname =
        failwith (sprintf "unknown mtype %s (we have: %s)" le._type all_mtypes) 
     end
   in
-  (* resolve the attachments
-  (match le._att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname db) a); *)
   match lifedb_entry_type mtype_info.m_implements with
   |Contact -> begin
     (* Message is a contact *)
@@ -223,6 +220,8 @@ let process_lifeentry db mtypes rootdir fname =
         let _ = stmt#step_once in
         people_id
     in 
+    (* resolve the attachments *)
+    (match le._att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname lifedb_id db) a);
     (* process the to entries *)
     match le._to with
     |Some addrs ->
@@ -302,7 +301,7 @@ let init db =
        people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
   db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
-let do_scan ?(subdir="") db =
+let do_scan ?(subdir="") (db:Sql_access.db) =
   Log.logmod "Mirror" "Starting scan";
   let lifedb_path = Filename.concat (Lifedb_config.Dir.lifedb ()) subdir in
   let mtypes = get_all_mtypes db in
