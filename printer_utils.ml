@@ -51,6 +51,12 @@ module Printer = struct
         e.p "}";
         e.nl ()
 
+    let print_object e nm fn =
+        e.p (sprintf "type %s = <" nm);
+        indent_fn e fn;
+        e.p ">";
+        e.nl ()
+
     let print_comment e x =
         e.p (sprintf "(* %s *)" x);
         
