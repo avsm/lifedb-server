@@ -216,14 +216,12 @@ let process_lifeentry db mtypes rootdir fname =
         stmt#bind1 (Sqlite3.Data.TEXT fname);
         let _ = stmt#step_once in
         stmt#column 0;
-        (* update abrecord in people also *)
     |_ ->
         let lifedb_id = stmt#column 0 in
         let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=?,summary=? where id=?" in
         stmt#bind [|ctime;mtype;people_id;lifedb_id;summary |];
         let _ = stmt#step_once in
         people_id
-        (* XXX update abrecord in people also *)
     in 
     (* process the to entries *)
     match le._to with
