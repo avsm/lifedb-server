@@ -73,6 +73,12 @@ let dispatch (cgi : Netcgi.cgi_activation) =
                mark_get_rpc cgi;
                Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
             end
+            |(`GET|`HEAD), "date" ->
+               mark_get_rpc cgi;
+               Lifedb_query.dispatch cgi (`Date (List.tl url_list))
+            |(`GET|`HEAD), "doc" ->
+               mark_get_rpc cgi;
+               Lifedb_query.dispatch cgi (`Doc (List.nth url_list 1))
             |_ -> raise (Invalid_rpc "Unknown request")
         with
         |Invalid_rpc reason ->
