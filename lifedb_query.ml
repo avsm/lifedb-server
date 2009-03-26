@@ -6,43 +6,70 @@ type json rpc_doc_list = {
     ids: string list
 }
 
+type json rpc_month_list = {
+    year: int;
+    month: int;
+    days: int array
+}
+
 let with_db fn =
      let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
      fn db
 
 let dispatch cgi = function
-  |`Date bits ->
+  |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
-     let day,month,year = try
-         intn 2, intn 1, intn 0
-       with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path")
-     in 
-     let btm = Unix.gmtime 0. in
-     let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month; tm_mday=day} in
-     let dateto = {datefrom with Unix.tm_hour=23; tm_min=59; tm_sec=59} in
-     let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
-     let sqlfrom = sqldate datefrom in
-     let sqlto = sqldate dateto in
-     let sql = sprintf
-         "SELECT
-          lifedb.id
-          FROM lifedb
-          LEFT JOIN mtype_map ON (mtype_map.id = lifedb.mtype)
-          LEFT JOIN people ON (people.id = lifedb.people_id)
-          LEFT JOIN contacts ON (contacts.id = people.contact_id)
-          WHERE
-          ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?, 'unixepoch') 
-          ORDER BY ctime DESC" in
-     let stmt = with_db (fun db -> db#stmt "getmsgs" sql) in
-     stmt#bind2 sqlfrom sqlto;
-     let ids = ref [] in
-     stmt#step_all (fun () ->
-       let id = stmt#int_col 0 in
-       ids := (Int64.to_string id) :: !ids;
-     );
-     let d,_ = Unix.mktime datefrom in
-     let r = { date=d; ids=(!ids) } in
-     cgi#output#output_string (Json_io.string_of_json (json_of_rpc_doc_list r))
+     match List.length bits with
+     |3 -> (* specific day to query doc_ids *)
+        let day,month,year = try
+            intn 2, intn 1, intn 0
+          with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path")
+        in 
+        let btm = Unix.gmtime 0. in
+        let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month; tm_mday=day} in
+        let dateto = {datefrom with Unix.tm_hour=23; tm_min=59; tm_sec=59} in
+        let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
+        let sqlfrom = sqldate datefrom in
+        let sqlto = sqldate dateto in
+        let sql = sprintf
+           "SELECT lifedb.id FROM lifedb WHERE
+            ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?, 'unixepoch') 
+            ORDER BY ctime DESC" in
+        let stmt = with_db (fun db -> db#stmt "getmsgs" sql) in
+        stmt#bind2 sqlfrom sqlto;
+        let ids = ref [] in
+        stmt#step_all (fun () ->
+            let id = stmt#int_col 0 in
+            ids := (Int64.to_string id) :: !ids;
+        );
+        let d,_ = Unix.mktime datefrom in
+        let r = { date=d; ids=(!ids) } in
+        cgi#output#output_string (Json_io.string_of_json (json_of_rpc_doc_list r))
+     |2 -> (* query the number of docs per day in a month *)
+        let month,year = try intn 1, intn 0 with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path") in
+        let btm = Unix.gmtime 0. in
+        let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month-1; tm_mday=1} in
+        let nextyear, nextmonth = match year,month with
+        |yr,12 -> yr+1,1
+        |yr,mn -> yr,mn+1 in 
+        print_endline (sprintf "m=%d y=%d   mm=%d yy=%d" month year nextmonth nextyear);
+        let dateto = {datefrom with Unix.tm_hour=0; tm_min=0; tm_sec=0; tm_year=(nextyear-1900); tm_mon=nextmonth-1; tm_mday=1} in
+        let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
+        let sqlfrom = sqldate datefrom in
+        let sqlto = sqldate dateto in
+        let sql = "SELECT strftime('%d', ctime) FROM lifedb WHERE ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?,'unixepoch')" in
+        let stmt = with_db (fun db -> db#stmt "getdaycount" sql) in
+        stmt#bind2 sqlfrom sqlto;
+        let freq = Array.create 31 0 in
+        stmt#step_all (fun () ->
+           let day = Int64.to_int (stmt#int_col 0) in
+           freq.(day-1) <- freq.(day-1) + 1
+        );
+        let r = { year=year; month=month; days=freq } in
+        cgi#output#output_string (Json_io.string_of_json (json_of_rpc_month_list r));
+     |_ ->
+        Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
+   end
   |`Doc id ->
      let sql = "select filename from lifedb where id=?" in
      let stmt = with_db (fun db -> db#stmt "getdoc" sql) in
@@ -58,4 +85,3 @@ let dispatch cgi = function
        let ch = new Netchannels.input_channel fh in
        cgi#output#output_channel ch;
        ch#close_in()
-
