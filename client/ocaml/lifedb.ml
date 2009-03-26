@@ -54,4 +54,24 @@ module Rpc = struct
     >
     and rs = (string,r) Hashtbl.t
   end
+
+  module Entry = struct
+
+    type json t = <
+      _type: string;
+      _timestamp: float;
+      ?_uid : string option;
+      ?abrecord: string option;
+      ?_from: addr option;
+      ?_to: addr list option;
+      ?first_name: string option;
+      ?last_name: string option;
+      ?_services: (string, string list) Hashtbl.t option;
+      ?subject: string option;
+      ?duration: int option;
+      ?text: string option;
+      ?_att: string list option
+    >
+    and addr = (string * string) assoc
+  end
 end

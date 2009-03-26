@@ -1,24 +1,7 @@
-(*pp $PP *)
-
-type json lifeentry = {
-    _type: string;
-    _timestamp: float;
-    ?_uid : string option;
-    ?abrecord: string option;
-    ?_from: addr option;
-    ?_to: addr list option;
-    ?first_name: string option;
-    ?last_name: string option;
-    ?_services: (string, string list) Hashtbl.t option;
-    ?subject: string option;
-    ?duration: int option;
-    ?text: string option;
-    ?_att: string list option
-} and addr = (string * string) assoc
-
 open Unix
 open Printf
 open Utils
+open Lifedb.Rpc
 
 type mtype = {
     m_id: Sqlite3.Data.t;
@@ -49,13 +32,13 @@ let summarykey js =
   let sopt = function
   |None -> None
   |Some x -> Some (sprintf "%d seconds" x) in
-  match js._type with
-  |"com.clinklabs.email" -> js.subject
-  |"com.apple.iphone.sms" -> js.text
-  |"com.apple.iphone.call" -> sopt js.duration
-  |"com.skype" -> sopt js.duration
-  |"com.twitter" -> js.text
-  |"com.adium" -> js.text
+  match js#_type with
+  |"com.clinklabs.email" -> js#subject
+  |"com.apple.iphone.sms" -> js#text
+  |"com.apple.iphone.call" -> sopt js#duration
+  |"com.skype" -> sopt js#duration
+  |"com.twitter" -> js#text
+  |"com.adium" -> js#text
   |x -> failwith ("summarykey:" ^ x)
 
 let summaryofmsg js : string =
@@ -109,12 +92,12 @@ let resolve_attachments rootdir fname lifedbid db a =
  
 let process_lifeentry db mtypes rootdir fname = 
   let json = Json_io.load_json ~big_int_mode:true fname in
-  let le = lifeentry_of_json json in
+  let le = Entry.t_of_json json in
   let mtype_info = try 
-      Hashtbl.find mtypes le._type
+      Hashtbl.find mtypes le#_type
     with Not_found -> begin
        let all_mtypes = String.concat "|" (Hashtbl.fold (fun k v a -> k :: a) mtypes []) in
-       failwith (sprintf "unknown mtype %s (we have: %s)" le._type all_mtypes) 
+       failwith (sprintf "unknown mtype %s (we have: %s)" le#_type all_mtypes) 
     end
   in
   match lifedb_entry_type mtype_info.m_implements with
@@ -122,12 +105,12 @@ let process_lifeentry db mtypes rootdir fname =
     (* Message is a contact *)
     let stmt = db#stmt "contactsel" "select id,file_name from contacts where uid=?" in
     let maybe_text = function |Some x -> Sqlite3.Data.TEXT x |None -> Sqlite3.Data.NULL in
-    let uid = match le._uid with 
+    let uid = match le#_uid with 
     |Some x -> Sqlite3.Data.TEXT x |None -> failwith "need _uid field for a contact entry" in
     stmt#bind1 uid;
-    let abrecord = maybe_text le.abrecord in
-    let firstname = maybe_text le.first_name in
-    let lastname = maybe_text le.last_name in
+    let abrecord = maybe_text le#abrecord in
+    let firstname = maybe_text le#first_name in
+    let lastname = maybe_text le#last_name in
     (* insert or update the contacts field *)
     let contact_id = match stmt#step_once with
     |0 ->
@@ -140,8 +123,8 @@ let process_lifeentry db mtypes rootdir fname =
        stmt#column 0
     |_ ->
        (* the contact does indeed exist, look for the mtime of the existing record *)
-       let existing_mtime = (lifeentry_of_json (Json_io.load_json ~big_int_mode:true (stmt#str_col 1)))._timestamp in
-       if existing_mtime < le._timestamp then begin
+       let existing_mtime = (Entry.t_of_json (Json_io.load_json ~big_int_mode:true (stmt#str_col 1)))#_timestamp in
+       if existing_mtime < le#_timestamp then begin
          Log.logmod "Mirror" "existing mtime is older, so updating record";
          let rowid = stmt#column 0 in
          let stmt = db#stmt "contactup" "update contacts set abrecord=?,first_name=?,last_name=?,file_name=? where id=?" in
@@ -153,7 +136,7 @@ let process_lifeentry db mtypes rootdir fname =
        end
     in
     (* insert the various services in this contact into people fields *)
-    let () = match le._services with
+    let () = match le#_services with
     |None -> ()
     |Some h ->
        Hashtbl.iter (fun service_name service_ids ->
@@ -180,8 +163,8 @@ let process_lifeentry db mtypes rootdir fname =
   |Message ->
     (* handle message JSON *)
     let mtype = mtype_info.m_id in
-    let ctime = Sqlite3.Data.INT (Int64.of_float le._timestamp) in
-    let from_addr = match le._from with |Some x -> x |None -> failwith "message must have _from" in
+    let ctime = Sqlite3.Data.INT (Int64.of_float le#_timestamp) in
+    let from_addr = match le#_from with |Some x -> x |None -> failwith "message must have _from" in
     (* take an address hash from the JSON and generate, update or retrieve people records and return the people_id *)
     let process_addr addr =
        let service_name = try Sqlite3.Data.TEXT (String.lowercase (List.assoc "type" addr)) with Not_found -> failwith "must have type field in addr" in
@@ -221,9 +204,9 @@ let process_lifeentry db mtypes rootdir fname =
         people_id
     in 
     (* resolve the attachments *)
-    (match le._att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname lifedb_id db) a);
+    (match le#_att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname lifedb_id db) a);
     (* process the to entries *)
-    match le._to with
+    match le#_to with
     |Some addrs ->
       List.iter (fun addr ->
         let people_id = process_addr addr in
