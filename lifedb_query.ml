@@ -75,21 +75,27 @@ let dispatch cgi = function
        |[] -> ()
        |contacts ->
          with_db (fun db ->
+           let sql = "select contacts.id, contacts.uid, contacts.abrecord, contacts.first_name, contacts.last_name from people left join contacts on (people.contact_id = contacts.id) where people.service_id=? and people.service_name=? and people.contact_id" in
+           let stmt = db#stmt "getid" sql in
            List.iter (fun c ->
-              let svc = try (String.lowercase (List.assoc "type" c )) with Not_found -> failwith "must have type field in addr" in
+              let svc = try (String.lowercase (List.assoc "type" c)) with Not_found -> failwith "must have type field in addr" in
               let id = try (String.lowercase (List.assoc "id" c)) with Not_found -> failwith "must have id field in addr" in
-              let sql = "select contacts.id, contacts.uid, contacts.abrecord, contacts.first_name, contacts.last_name from people left join contacts on (people.contact_id = contacts.id) where people.service_id=? and people.service_name=?" in
-              let stmt = db#stmt "getid" sql in
               stmt#bind2 (Sqlite3.Data.TEXT id) (Sqlite3.Data.TEXT svc);
               match stmt#step_once with
               |0 -> ()
               |_ -> 
+                let strval pos = match stmt#str_col pos with "" -> None |x -> Some x in
+                let id = stmt#str_col 0 in
+                let uid = strval 1 in
+                let abrecord = strval 2 in
+                let fname = stmt#str_col 3 in
+                let lname = stmt#str_col 4 in
                 let c = object
-                 method id = stmt#str_col 0
-                 method uid = Some (stmt#str_col 1)
-                 method abrecord = Some (stmt#str_col 2)
-                 method first_name =  stmt#str_col 3
-                 method last_name = stmt#str_col 4
+                 method id = id
+                 method uid = uid
+                 method abrecord = abrecord
+                 method first_name =  fname
+                 method last_name = lname
                 end in
                 let svch = try Hashtbl.find chash svc with Not_found -> let h=Hashtbl.create 1 in Hashtbl.add chash svc h; h in
                 Hashtbl.replace svch id c
