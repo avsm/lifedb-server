@@ -69,7 +69,7 @@ let dispatch cgi = function
        let json = Entry.t_of_json (Json_io.load_json ~big_int_mode:true fname) in
        let contacts = match json#_from, json#_to with
          |None, None -> []  |Some x, None -> [x]
-         |None, Some x -> x      |Some x, Some y -> x :: y in
+         |None, Some x -> x |Some x, Some y -> x :: y in
        let chash = Hashtbl.create 1 in
        let () = match contacts with 
        |[] -> ()
@@ -85,13 +85,13 @@ let dispatch cgi = function
               |0 -> ()
               |_ -> 
                 let strval pos = match stmt#str_col pos with "" -> None |x -> Some x in
-                let id = stmt#str_col 0 in
+                let cid = stmt#str_col 0 in
                 let uid = strval 1 in
                 let abrecord = strval 2 in
                 let fname = stmt#str_col 3 in
                 let lname = stmt#str_col 4 in
                 let c = object
-                 method id = id
+                 method id = cid
                  method uid = uid
                  method abrecord = abrecord
                  method first_name =  fname
