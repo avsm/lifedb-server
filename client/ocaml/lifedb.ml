@@ -11,6 +11,7 @@ module Rpc = struct
       plugins_directory: string list;
       log_directory: string;
       cache_directory: string;
+      static_directory: string;
       test_mode: bool
     >
   end

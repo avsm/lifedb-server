@@ -84,3 +84,20 @@ let dispatch (cgi : Netcgi.cgi_activation) =
         |Invalid_rpc reason ->
             return_error cgi `Bad_request "Invalid RPC" reason
     end
+
+
+let handler env cgi =
+  let cgi = Netcgi1_compat.Netcgi_types.of_compat_activation cgi in
+  try
+    cgi#set_header~cache:`No_cache ~content_type:"text/html; charset=\"iso-8859-1\"" ();
+    dispatch cgi;
+    cgi#output#commit_work();
+  with
+  |error ->
+    cgi#output #rollback_work();
+    cgi#set_header~status:`Internal_server_error ~cache:`No_cache ~content_type:"text/plain; charset=\"iso-8859-1\"" ();
+    cgi#output#output_string "Unexpected software exception:\n";
+    cgi#output#output_string (Printexc.to_string error);
+    cgi#output#output_string "\n";
+    cgi#output#commit_work ()
+

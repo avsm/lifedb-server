@@ -19,11 +19,12 @@ SOURCES= client/ocaml/lifedb.ml \
 	sql_mtype_map.ml sql_mirror.ml \
 	lifedb_rpc.ml \
 	lifedb_passwd.ml \
-	lifedb_session.ml db_thread_access.ml \
+	db_thread_access.ml \
 	lifedb_plugin.ml lifedb_tasks.ml \
 	db_thread.ml lifedb_static.ml \
 	lifedb_query.ml \
 	lifedb_dispatch.ml \
+	http_server.ml \
         server.ml
 THREADS=yes
 RESULT=lifedb_server
@@ -39,7 +40,7 @@ all: dnc
 
 .PHONY: run
 run:
-	./$(RESULT) -conf ./netplex.cfg -fg
+	./$(RESULT)
 
 .PHONY: stop
 stop:

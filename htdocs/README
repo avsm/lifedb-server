@@ -1,0 +1,2 @@
+The static directory where the UI can be served from.
+Served from /static in the LifeDB HTTP API.

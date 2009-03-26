@@ -8,6 +8,7 @@ module Dir = struct
     let log_dir = ref ""
     let plugins_dir = ref []
     let config_dir = ref ""
+    let static_dir = ref ""
 
     let lifedb () = !lifedb_dir
     let lifedb_db () = Filename.concat !lifedb_dir "life.db"
@@ -16,6 +17,8 @@ module Dir = struct
     let plugins () = !plugins_dir
     let config () = !config_dir
     let passwd_db () = Filename.concat !config_dir "passwd.db"
+
+    let static () = !static_dir
 end
 
 let test_mode_val = ref false
@@ -35,6 +38,7 @@ let read_config file =
     Dir.log_dir := subst conf#log_directory;
     Dir.cache_dir := subst conf#cache_directory;
     Dir.config_dir := subst conf#config_directory;
+    Dir.static_dir := subst conf#static_directory;
     test_mode_val := conf#test_mode;
     config_filename_val := realpath file
 
@@ -45,6 +49,7 @@ let string_of_config () =
        method log_directory = Dir.log ()
        method cache_directory = Dir.cache ()
        method config_directory = Dir.config ()
+       method static_directory = Dir.static ()
        method test_mode = test_mode ()
     end) in
     Json_io.string_of_json json
