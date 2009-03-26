@@ -64,12 +64,39 @@ let dispatch cgi = function
      stmt#bind1 (Sqlite3.Data.INT (Int64.of_string id));
      match stmt#step_once with
      |0 -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
-     |_ -> 
+     |_ ->  begin
        let fname = stmt#str_col 0 in
-       let fh = open_in_bin fname in
-       let size = in_channel_length fh in
-       let user_filename = Pcre.qreplace ~rex:(Pcre.regexp "[ \\\"\\\\]") ~templ:"_" (Filename.basename fname) in
-       cgi#set_header ~content_type:"application/octet-stream" ~content_length:size ~cache:`No_cache ~filename:user_filename ();
-       let ch = new Netchannels.input_channel fh in
-       cgi#output#output_channel ch;
-       ch#close_in()
+       let json = Entry.t_of_json (Json_io.load_json ~big_int_mode:true fname) in
+       let contacts = match json#_from, json#_to with
+         |None, None -> []  |Some x, None -> [x]
+         |None, Some x -> x      |Some x, Some y -> x :: y in
+       let chash = Hashtbl.create 1 in
+       let () = match contacts with 
+       |[] -> ()
+       |contacts ->
+         with_db (fun db ->
+           List.iter (fun c ->
+              let svc = try (String.lowercase (List.assoc "type" c )) with Not_found -> failwith "must have type field in addr" in
+              let id = try (String.lowercase (List.assoc "id" c)) with Not_found -> failwith "must have id field in addr" in
+              let sql = "select contacts.id, contacts.uid, contacts.abrecord, contacts.first_name, contacts.last_name from people left join contacts on (people.contact_id = contacts.id) where people.service_id=? and people.service_name=?" in
+              let stmt = db#stmt "getid" sql in
+              stmt#bind2 (Sqlite3.Data.TEXT id) (Sqlite3.Data.TEXT svc);
+              match stmt#step_once with
+              |0 -> ()
+              |_ -> 
+                let c = object
+                 method id = stmt#str_col 0
+                 method uid = Some (stmt#str_col 1)
+                 method abrecord = Some (stmt#str_col 2)
+                 method first_name =  stmt#str_col 3
+                 method last_name = stmt#str_col 4
+                end in
+                let svch = try Hashtbl.find chash svc with Not_found -> let h=Hashtbl.create 1 in Hashtbl.add chash svc h; h in
+                Hashtbl.replace svch id c
+           ) contacts;
+         );
+       in
+       let r = object method entry=json method contacts=chash end in
+       let out = Json_io.string_of_json (Entry.json_of_doc r) in
+       cgi#output#output_string out
+     end

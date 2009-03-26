@@ -57,7 +57,16 @@ module Rpc = struct
 
   module Entry = struct
 
-    type json t = <
+    type json contact = <
+       id: string;
+       first_name: string;
+       last_name: string;
+       abrecord: string option;
+       uid: string option
+    >
+    and addr =
+      (string * string) assoc
+    and t = <
       _type: string;
       _timestamp: float;
       ?_uid : string option;
@@ -72,7 +81,10 @@ module Rpc = struct
       ?text: string option;
       ?_att: string list option
     >
-    and addr = (string * string) assoc
+    and doc = <
+      entry: t;
+      contacts: (string, (string, contact) Hashtbl.t) Hashtbl.t
+    >
   end
 
   module Query = struct
@@ -85,8 +97,7 @@ module Rpc = struct
       year: int;
       month: int;
       days: int array
-    >
+    > 
 
   end
-
 end
