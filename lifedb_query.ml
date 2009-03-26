@@ -1,16 +1,5 @@
-(*pp $PP *)
 open Printf
-
-type json rpc_doc_list = {
-    date: float;
-    ids: string list
-}
-
-type json rpc_month_list = {
-    year: int;
-    month: int;
-    days: int array
-}
+open Lifedb.Rpc
 
 let with_db fn =
      let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
@@ -43,8 +32,8 @@ let dispatch cgi = function
             ids := (Int64.to_string id) :: !ids;
         );
         let d,_ = Unix.mktime datefrom in
-        let r = { date=d; ids=(!ids) } in
-        cgi#output#output_string (Json_io.string_of_json (json_of_rpc_doc_list r))
+        let r = object method date=d method ids=(!ids) end in
+        cgi#output#output_string (Json_io.string_of_json (Query.json_of_day_list r))
      |2 -> (* query the number of docs per day in a month *)
         let month,year = try intn 1, intn 0 with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path") in
         let btm = Unix.gmtime 0. in
@@ -52,7 +41,6 @@ let dispatch cgi = function
         let nextyear, nextmonth = match year,month with
         |yr,12 -> yr+1,1
         |yr,mn -> yr,mn+1 in 
-        print_endline (sprintf "m=%d y=%d   mm=%d yy=%d" month year nextmonth nextyear);
         let dateto = {datefrom with Unix.tm_hour=0; tm_min=0; tm_sec=0; tm_year=(nextyear-1900); tm_mon=nextmonth-1; tm_mday=1} in
         let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
         let sqlfrom = sqldate datefrom in
@@ -65,8 +53,8 @@ let dispatch cgi = function
            let day = Int64.to_int (stmt#int_col 0) in
            freq.(day-1) <- freq.(day-1) + 1
         );
-        let r = { year=year; month=month; days=freq } in
-        cgi#output#output_string (Json_io.string_of_json (json_of_rpc_month_list r));
+        let r = object method year=year method month=month method days=freq end in
+        cgi#output#output_string (Json_io.string_of_json (Query.json_of_month_list r));
      |_ ->
         Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
    end

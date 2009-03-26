@@ -74,4 +74,19 @@ module Rpc = struct
     >
     and addr = (string * string) assoc
   end
+
+  module Query = struct
+    type json day_list = <
+      date: float;
+      ids: string list
+    >
+
+    type json month_list = <
+      year: int;
+      month: int;
+      days: int array
+    >
+
+  end
+
 end
