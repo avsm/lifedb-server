@@ -78,4 +78,23 @@ class client url username password =
 
     method config = get "config"
     method debug_config = debug (get "config")
+
+    method doc id =
+      get (sprintf "doc/%s" id) >>== Rpc.Entry.doc_of_json
+
+    method debug_doc id =
+      self#doc id >>>= Rpc.Entry.json_of_doc
+
+    method month_list year month =
+      get (sprintf "/date/%.4d/%.2d" year month) >>== Rpc.Query.month_list_of_json
+ 
+    method debug_month_list year month =
+      self#month_list year month >>>= Rpc.Query.json_of_month_list
+
+    method day_list year month day =
+      get (sprintf "/date/%.4d/%.2d/%.2d" year month day) >>== Rpc.Query.day_list_of_json
+    
+    method debug_day_list year month day =
+      self#day_list year month day >>>= Rpc.Query.json_of_day_list
+
   end
