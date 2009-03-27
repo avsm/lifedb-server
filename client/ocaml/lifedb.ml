@@ -32,6 +32,7 @@ module Rpc = struct
       dir: string
     >
     and ts = (string, r) Hashtbl.t
+    and decls = decl list
   end
 
   module Task = struct

@@ -56,21 +56,40 @@ let dispatch db env cgi = function
         Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
    end
   |`Mtype bits -> begin
-     let mtype = List.hd bits in
-     let stmt = db#stmt "getmtype" "select label,implements,icon from mtype_map where mtype=?" in
-     stmt#bind1 (Sqlite3.Data.TEXT mtype);
-     match stmt#step_once with
-     |0 -> Lifedb_rpc.return_error cgi `Not_found "pltype not found" "unknown pltype"
-     |_ -> begin
-       let icon = stmt#str_col 2 in
-       match List.tl bits with
-       |[opt] when opt = "icon" ->
-         Lifedb_rpc.return_file cgi icon "image/png"
-       |_ ->
-         let label = stmt#str_col 0 in
-         let impl = stmt#str_col 1 in
-         let decl = object method pltype=mtype method description=label method implements=impl method icon=Some icon end in
-         Lifedb_rpc.return_json cgi (Plugin.json_of_decl decl)
+     match bits with
+     |[] -> begin (* list of known mtypes *)
+        let stmt = db#stmt "allmtypesx" "select mtype,label,implements,icon from mtype_map" in
+        stmt#bind0;
+        let m = ref [] in
+        stmt#step_all (fun () ->
+          let mtype = stmt#str_col 0 in 
+          let label = stmt#str_col 1 in
+          let impl = stmt#str_col 2 in
+          let icon = match stmt#str_col 3 with "" -> None |x -> Some x in
+          let decl = object method pltype=mtype method description=label method implements=impl method icon=icon end in
+          m := decl :: !m;
+        );
+        Lifedb_rpc.return_json cgi (Plugin.json_of_decls !m)
+     end
+     |mtype :: tl -> begin (* info on mtype *)
+       let stmt = db#stmt "getmtype" "select label,implements,icon from mtype_map where mtype=?" in
+       stmt#bind1 (Sqlite3.Data.TEXT mtype);
+       match stmt#step_once with
+       |0 -> Lifedb_rpc.return_error cgi `Not_found "pltype not found" "unknown pltype"
+       |_ -> begin
+         let icon = match stmt#str_col 2 with "" -> None |x -> Some x in
+         match tl with
+         |[opt] when opt = "icon" -> begin
+           match icon with
+           |None -> Lifedb_rpc.return_error cgi `Not_found "No icon" "This plugin doesnt have an icon registered"
+           |Some icon -> Lifedb_rpc.return_file cgi icon "image/png"
+         end
+         |_ ->
+           let label = stmt#str_col 0 in
+           let impl = stmt#str_col 1 in
+           let decl = object method pltype=mtype method description=label method implements=impl method icon=icon end in
+           Lifedb_rpc.return_json cgi (Plugin.json_of_decl decl)
+       end
      end
    end
   |`Doc id ->
