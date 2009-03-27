@@ -2,7 +2,7 @@ open Printf
 open Lifedb.Rpc
 open Utils
 
-let dispatch db cgi = function
+let dispatch db env cgi = function
   |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
      match List.length bits with
@@ -30,7 +30,7 @@ let dispatch db cgi = function
         );
         let d,_ = Unix.mktime datefrom in
         let r = object method date=d method ids=(!ids) end in
-        cgi#output#output_string (Json_io.string_of_json (Query.json_of_day_list r))
+        Lifedb_rpc.return_json cgi (Query.json_of_day_list r)
      |2 -> (* query the number of docs per day in a month *)
         let month,year = try intn 1, intn 0 with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path") in
         let btm = Unix.gmtime 0. in
@@ -51,9 +51,27 @@ let dispatch db cgi = function
            freq.(day-1) <- freq.(day-1) + 1
         );
         let r = object method year=year method month=month method days=freq end in
-        cgi#output#output_string (Json_io.string_of_json (Query.json_of_month_list r));
+        Lifedb_rpc.return_json cgi (Query.json_of_month_list r)
      |_ ->
         Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
+   end
+  |`Mtype bits -> begin
+     let mtype = List.hd bits in
+     let stmt = db#stmt "getmtype" "select label,implements,icon from mtype_map where mtype=?" in
+     stmt#bind1 (Sqlite3.Data.TEXT mtype);
+     match stmt#step_once with
+     |0 -> Lifedb_rpc.return_error cgi `Not_found "pltype not found" "unknown pltype"
+     |_ -> begin
+       let icon = stmt#str_col 2 in
+       match List.tl bits with
+       |[opt] when opt = "icon" ->
+         Lifedb_rpc.return_file cgi icon "image/png"
+       |_ ->
+         let label = stmt#str_col 0 in
+         let impl = stmt#str_col 1 in
+         let decl = object method pltype=mtype method description=label method implements=impl method icon=Some icon end in
+         Lifedb_rpc.return_json cgi (Plugin.json_of_decl decl)
+     end
    end
   |`Doc id ->
      let sql = "select filename from lifedb where id=?" in
@@ -98,6 +116,5 @@ let dispatch db cgi = function
            ) contacts;
        in
        let r = object method entry=json method contacts=chash end in
-       let out = Json_io.string_of_json (Entry.json_of_doc r) in
-       cgi#output#output_string out
+       Lifedb_rpc.return_json cgi (Entry.json_of_doc r)
      end

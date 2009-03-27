@@ -97,4 +97,10 @@ class client url username password =
     method debug_day_list year month day =
       self#day_list year month day >>>= Rpc.Query.json_of_day_list
 
+    method pltype_info pltype =
+      get (sprintf "pltype/%s" pltype) >>== Rpc.Plugin.decl_of_json
+
+    method debug_pltype_info pltype =
+      self#pltype_info pltype >>>= Rpc.Plugin.json_of_decl
+
   end

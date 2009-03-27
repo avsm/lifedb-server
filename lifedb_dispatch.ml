@@ -13,7 +13,7 @@ let mark_get_rpc (cgi : Netcgi.cgi_activation) =
 let mark_delete_rpc (cgi : Netcgi.cgi_activation) =
     cgi#set_header ~cache:`No_cache ()
 
-let dispatch (db : Sql_access.db) (cgi : Netcgi.cgi_activation) =
+let dispatch (db : Sql_access.db) env (cgi : Netcgi.cgi_activation) =
     let u = Nethttp.uripath_decode (cgi#url ()) in
     let url = Neturl.parse_url u in
     let url_list = List.filter ((<>) "") (Neturl.url_path url) in
@@ -75,10 +75,13 @@ let dispatch (db : Sql_access.db) (cgi : Netcgi.cgi_activation) =
             end
             |(`GET|`HEAD), "date" ->
                mark_get_rpc cgi;
-               Lifedb_query.dispatch db cgi (`Date (List.tl url_list))
+               Lifedb_query.dispatch db env cgi (`Date (List.tl url_list))
             |(`GET|`HEAD), "doc" ->
                mark_get_rpc cgi;
-               Lifedb_query.dispatch db cgi (`Doc (List.nth url_list 1))
+               Lifedb_query.dispatch db env cgi (`Doc (List.nth url_list 1))
+            |(`GET|`HEAD), "pltype" ->
+               mark_get_rpc cgi;
+               Lifedb_query.dispatch db env cgi (`Mtype (List.tl url_list))
             |_ -> raise (Invalid_rpc "Unknown request")
         with
         |Invalid_rpc reason ->
@@ -90,7 +93,7 @@ let handler db env cgi =
   let cgi = Netcgi1_compat.Netcgi_types.of_compat_activation cgi in
   try
     cgi#set_header~cache:`No_cache ~content_type:"text/html; charset=\"iso-8859-1\"" ();
-    dispatch db cgi;
+    dispatch db env cgi;
     cgi#output#commit_work();
   with
   |error ->

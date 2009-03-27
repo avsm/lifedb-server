@@ -27,6 +27,20 @@ let return_need_auth (cgi:Netcgi.cgi_activation) =
     Nethttp.Header.set_www_authenticate cgi#environment#output_header
         ["basic", ["realm", "LifeDB credentials"]]
 
+let return_file (cgi:Netcgi.cgi_activation) fname mime = 
+    let fh = open_in_bin fname in
+    let size = in_channel_length fh in
+    let user_filename = Pcre.qreplace ~rex:(Pcre.regexp "[ \\\"\\\\]") ~templ:"_" (Filename.basename fname) in
+    cgi#set_header ~content_type:mime ~content_length:size ~filename:user_filename ();
+    let ch = new Netchannels.input_channel fh in
+    cgi#output#output_channel ch;
+    ch#close_in()
+
+let return_json cgi j =
+    let out = Json_io.string_of_json j in
+    cgi#output#commit_work ();
+    cgi#output#output_string out
+
 let check_passwd username passwd =
     (username = (Lifedb_config.root_user ())) && (passwd = (!passphrase))
 
