@@ -28,6 +28,7 @@ directory.
  * log_directory: Directory to drop task logfiles and database to
  * cache_directory: temporary space to hold cache files from plugins
  * config_directory: directory where passwords and task information is stored.
+ * static_directory: static HTML files to serve up via /static
  * test_mode: if true, will not actually run commands but do everything else.
 
 Password Management
@@ -145,4 +146,5 @@ The various JSON return types are defined in client/ocaml/lifedb.ml
 
  * /pltype/<plugin type>/icon : returns the icon via HTTP if it exists.
 
-
+ * All files in the "./htdocs" directory (the static_directory setting in the
+   config file) are served up via the /static URL.
