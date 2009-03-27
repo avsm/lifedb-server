@@ -109,7 +109,7 @@ Running
 
 To run the server in the foreground:
 
-# ./lifedb_server -conf netplex.cfg -fg
+# ./lifedb_server 
 
 This is also the "make run" Makefile target.
 
@@ -126,6 +126,23 @@ Useful URLS
 You must authenticate successfully using HTTP auth before any other actions
 are permitted.
 
+The various JSON return types are defined in client/ocaml/lifedb.ml
+
  * /config  : returns the global server configuration as JSON with all 
    variables fully substituted in.
+
+ * /date/<year>/<month> : returns Rpc.Query.month_list with message counts
+   for the days in the selected month.  Useful for populating calendar widget.
+
+ * /date/<year>/<month>/<day> : return Rpc.Query.day_list with message
+   info for the entries for the particular day. 
+
+ * /doc/<id> : return Rpc.Entry.doc with the LifeDB entry and additional
+   info (e.g. contacts) for the particular doc ID.
+
+ * /pltype/<plugin type> : returns Rpc.Plugin.decl with information about
+   the media type.  Includes a filesystem location for icon if it exists.
+
+ * /pltype/<plugin type>/icon : returns the icon via HTTP if it exists.
+
 
