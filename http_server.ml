@@ -3,7 +3,7 @@ open Nethttpd_services
 open Nethttpd_reactor
 open Printf
 
-let http_config () =
+let http_config db =
   let static = {
     file_docroot = Lifedb_config.Dir.static ();
     file_uri = "/static";
@@ -18,7 +18,7 @@ let http_config () =
         "*", (options_service());
         "/static", (file_service static);
         "/", (dynamic_service { 
-          dyn_handler = Lifedb_dispatch.handler;
+          dyn_handler = Lifedb_dispatch.handler db;
           dyn_activation = std_activation `Std_activation_buffered;
           dyn_uri = None;
           dyn_translator = (fun _ -> "");
@@ -56,15 +56,17 @@ let init () =
   Unix.bind master_sock (Unix.ADDR_INET(Unix.inet_addr_any, 5985));
   Unix.listen master_sock 50;
 
+  let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
+  let http_config = http_config db in
   while true do
     try
+      Gc.compact ();
       let conn_sock, _ = Unix.accept master_sock in
       Unix.set_nonblock conn_sock;
-      let _ =
-    Thread.create
-      (process_connection config conn_sock)
-      (http_config ())
-      in
+      (*
+      let _ = Thread.create (process_connection config conn_sock) (http_config ()) in
+      *)
+      process_connection config conn_sock http_config;
       ()
     with
         Unix.Unix_error(Unix.EINTR,_,_) -> () 

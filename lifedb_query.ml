@@ -1,11 +1,8 @@
 open Printf
 open Lifedb.Rpc
+open Utils
 
-let with_db fn =
-     let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
-     fn db
-
-let dispatch cgi = function
+let dispatch db cgi = function
   |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
      match List.length bits with
@@ -24,7 +21,7 @@ let dispatch cgi = function
            "SELECT lifedb.id FROM lifedb WHERE
             ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?, 'unixepoch') 
             ORDER BY ctime DESC" in
-        let stmt = with_db (fun db -> db#stmt "getmsgs" sql) in
+        let stmt = db#stmt "getmsgs" sql in
         stmt#bind2 sqlfrom sqlto;
         let ids = ref [] in
         stmt#step_all (fun () ->
@@ -46,7 +43,7 @@ let dispatch cgi = function
         let sqlfrom = sqldate datefrom in
         let sqlto = sqldate dateto in
         let sql = "SELECT strftime('%d', ctime) FROM lifedb WHERE ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?,'unixepoch')" in
-        let stmt = with_db (fun db -> db#stmt "getdaycount" sql) in
+        let stmt = db#stmt "getdaycount" sql in
         stmt#bind2 sqlfrom sqlto;
         let freq = Array.create 31 0 in
         stmt#step_all (fun () ->
@@ -60,7 +57,7 @@ let dispatch cgi = function
    end
   |`Doc id ->
      let sql = "select filename from lifedb where id=?" in
-     let stmt = with_db (fun db -> db#stmt "getdoc" sql) in
+     let stmt = db#stmt "getdoc" sql in
      stmt#bind1 (Sqlite3.Data.INT (Int64.of_string id));
      match stmt#step_once with
      |0 -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
@@ -74,7 +71,6 @@ let dispatch cgi = function
        let () = match contacts with 
        |[] -> ()
        |contacts ->
-         with_db (fun db ->
            let sql = "select contacts.id, contacts.uid, contacts.abrecord, contacts.first_name, contacts.last_name from people left join contacts on (people.contact_id = contacts.id) where people.service_id=? and people.service_name=? and people.contact_id" in
            let stmt = db#stmt "getid" sql in
            List.iter (fun c ->
@@ -100,7 +96,6 @@ let dispatch cgi = function
                 let svch = try Hashtbl.find chash svc with Not_found -> let h=Hashtbl.create 1 in Hashtbl.add chash svc h; h in
                 Hashtbl.replace svch id c
            ) contacts;
-         );
        in
        let r = object method entry=json method contacts=chash end in
        let out = Json_io.string_of_json (Entry.json_of_doc r) in
