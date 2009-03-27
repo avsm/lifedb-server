@@ -1,5 +1,3 @@
-(*pp $PP *)
-
 (* This thread handles all the database write operations.
    There is a queue which represents "kick" requests from
    other threads. *)
