@@ -15,6 +15,7 @@ module Dir = struct
     let plugins () = !plugins_dir
     let config () = !config_dir
     let passwd_db () = Filename.concat !config_dir "passwd.db"
+    let sync_db () = Filename.concat !config_dir "sync.db"
 
     let static () = !static_dir
 end

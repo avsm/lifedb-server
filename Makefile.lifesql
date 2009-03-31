@@ -10,6 +10,7 @@ export OCAMLRUNPARAM
 
 USE_CAMLP4 := yes
 SOURCES= client/ocaml/lifedb.ml custom_unix_stubs.c utils.ml lifedb_config.ml sql_access.ml log.ml \
+	sync_schema.ml lifedb_schema.ml \
 	sql_mtype_map.ml sql_mirror.ml lifesql.ml
 THREADS=yes
 RESULT=lifesql

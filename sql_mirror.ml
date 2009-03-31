@@ -237,32 +237,28 @@ let process_directory db mtypes rootdir dir =
   
 let dir_needs_update db dir =
   try
-    let dir_mtime = Int64.of_float (Unix.stat dir).st_mtime in
-    let needs_update = ref (Some dir_mtime) in
-    let stmt = db#stmt "dircache" "select mtime from dircache where dir=?" in
-    stmt#bind1 (Sqlite3.Data.TEXT dir);
-    let () = match stmt#step_once with
-    |0 -> ()
-    |1 ->
-      let db_mtime = Int64.of_string (Sqlite3.Data.to_string (stmt#column 0)) in
-      if dir_mtime <= db_mtime then needs_update := None
-    |_ -> failwith "dup dircache entries" in
-    !needs_update
-  with Unix.Unix_error _ -> None
+    let dir_mtime = (Unix.stat dir).st_mtime in
+    match Sync_schema.Dircache.get ~dir:(Some dir) db with
+    |[] -> Some dir_mtime
+    |[entry] -> if dir_mtime <= entry#mtime then None else Some dir_mtime
+    |_ -> assert false
+  with Unix.Unix_error _ -> (printf "error!\n"; None)
 
 let dir_is_updated db dir mtime =
-  let stmt = db#stmt "dircache_updated" "insert or replace into dircache values(?,?)" in
-  stmt#bind [| (Sqlite3.Data.TEXT dir); (Sqlite3.Data.INT mtime) |];
-  let _ = stmt#step_once in ()
+  let dir = match Sync_schema.Dircache.get ~dir:(Some dir) db with
+  |[] -> Sync_schema.Dircache.t ~dir:dir ~mtime:mtime db
+  |[entry] -> entry#set_mtime mtime; entry
+  |_ -> assert false in
+  ignore(dir#save)
 
-let check_directory db mtypes rootdir dir = 
-  match dir_needs_update db dir with
+let check_directory db syncdb mtypes rootdir dir = 
+  match dir_needs_update syncdb dir with
   |Some old_mtime  ->
+     Log.logmod "Mirror" "Processing %s" dir;
      db#transaction (fun () ->
          process_directory db mtypes rootdir dir;
-         dir_is_updated db dir old_mtime;
+         dir_is_updated syncdb dir old_mtime;
      );
-     Log.logmod "Mirror" "Processing %s" dir
   |None -> ()
 
 let init db =
@@ -284,12 +280,12 @@ let init db =
        people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
   db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
 
-let do_scan ?(subdir="") (db:Sql_access.db) =
+let do_scan ?(subdir="") (db:Sql_access.db) syncdb =
   Log.logmod "Mirror" "Starting scan";
   let lifedb_path = Filename.concat (Lifedb_config.Dir.lifedb ()) subdir in
   let mtypes = get_all_mtypes db in
   if not (Lifedb_config.test_mode ()) then
-      walk_directory_tree lifedb_path (check_directory db mtypes lifedb_path);
+      walk_directory_tree lifedb_path (check_directory db syncdb mtypes lifedb_path);
   Log.logmod "Mirror" "Finished scan"
 
 let dispatch cgi args =

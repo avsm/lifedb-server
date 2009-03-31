@@ -17,3 +17,6 @@
 /scripts/
 /mactest
 /lifesql
+sync_schema.*
+lifedb_schema.*
+/lifedb_schema_generator

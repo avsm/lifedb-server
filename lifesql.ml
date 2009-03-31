@@ -3,8 +3,13 @@
 let _ =
   Lifedb_config.read_config "config.json";
   Log.init ();
-  let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
-  Sql_mirror.init db;
-  Sql_mirror.do_scan db
-  
+(*  let lifedb = Sql_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in *)
+  let lifedb = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
+  let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
+  try
+    Sql_mirror.do_scan lifedb syncdb;
+  with e -> (
+    Thread.delay 2.;
+    raise e
+  )
 
