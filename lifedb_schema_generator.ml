@@ -20,27 +20,31 @@ let lifedb = make [
   "attachment" , [
     text "file_name";
     text "mime_type";
+  ], [
   ];
 
   "contact" , [
     text "file_name";
     text "uid";
-    text "first_name";
-    text "last_name";
+    text ~flags:[`Optional] "first_name";
+    text ~flags:[`Optional] "last_name";
     date "mtime";
+  ], [
   ];
 
   "mtype" , [
     text "name";
     text "label";
-    text "icon";
+    text ~flags:[`Optional] "icon";
     text "implements";
+  ], [
   ];
 
   "service" , [
     text "name";
     text "uid";
     foreign ~flags:[`Optional] "contact" "contact";
+  ],[
   ];
 
   "entry" , [
@@ -49,6 +53,9 @@ let lifedb = make [
     foreign "mtype" "mtype";
     foreign "service" "from";
     foreign_many "service" "recipients";
+    foreign_many "attachment" "atts";
+  ],[
+
   ];
 ]
 
@@ -56,10 +63,12 @@ let sync = make [
   "dircache", [
     text "dir";
     date "mtime";
+  ],[
+
   ];
 ]
 
 let _ = 
-    Sql_orm.generate ~debug:true lifedb "lifedb_schema";
+    Sql_orm.generate ~debug:false lifedb "lifedb_schema";
     Sql_orm.generate ~debug:true sync "sync_schema";
     ()

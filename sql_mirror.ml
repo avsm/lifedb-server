@@ -1,12 +1,8 @@
 open Unix
 open Printf
 open Utils
-open Lifedb.Rpc
-
-type mtype = {
-    m_id: Sqlite3.Data.t;
-    m_implements: string;
-}
+open Lifedb
+open Lifedb_schema
 
 let walk_directory_tree dir walkfn =
   let rec walk dir =
@@ -48,38 +44,23 @@ let summaryofmsg js : string =
 
 let get_all_mtypes db =
   let h = Hashtbl.create 1 in
-  let stmt = db#stmt "all_mtypes" "select id,mtype,implements from mtype_map" in
-  stmt#bind0;
-  stmt#step_all (fun () ->
-      let m = { m_id=stmt#column 0; m_implements=(Sqlite3.Data.to_string (stmt#column 2)) } in
-      Hashtbl.add h (Sqlite3.Data.to_string (stmt#column 1)) m
-  );
+  List.iter (fun m -> Hashtbl.add h m#name m) (Mtype.get db);
   h
 
 (* to resolve an attachment, we look for an _att directory one level up, and keep
    looking until we hit the root lifedb directory *)
-let resolve_attachments rootdir fname lifedbid db a =
+let resolve_attachments rootdir fname db a =
   (* normalize rootdir *)
   let rootdir = Filename.dirname (Filename.concat rootdir "foo") in
   let rec checkdir bdir =
       let attfname = String.concat "/" [bdir; "_att"; a] in
+      let mime_type = "XXX" in
       if Sys.file_exists attfname then begin
-         (* look for entry in attachments table *)
-         let stmt = db#stmt "attsel" "select id from attachments where file_name=?" in
-         let fname' = Sqlite3.Data.TEXT attfname in
-         stmt#bind1 fname'; 
-         (match stmt#step_once with
-         |0 -> (* insert *)
-             let stmt = db#stmt "attins" "insert into attachments values(NULL,?,?)" in
-             stmt#bind2 lifedbid fname';
-             let _ = stmt#step_once in ()
-         |_ -> (* update *)
-             let id = stmt#column 0 in
-             let stmt = db#stmt "attup" "update attachments set lifedb_id=?, file_name=? where id=?" in
-             stmt#bind3 lifedbid fname' id;
-             let _ = stmt#step_once in ()
-         );
-         Some attfname
+         let a = match Attachment.get ~file_name:(Some attfname) db with
+         |[] -> Attachment.t ~file_name:attfname ~mime_type db 
+         |[a] -> a#set_mime_type mime_type; a
+         |_ -> assert false in
+         Some a
       end else begin
           if bdir = rootdir || (String.length bdir < 2) then
               None
@@ -88,11 +69,11 @@ let resolve_attachments rootdir fname lifedbid db a =
           end
       end
   in
-  ignore(checkdir (Filename.dirname fname))
+  checkdir (Filename.dirname fname)
  
 let process_lifeentry db mtypes rootdir fname = 
   let json = Json_io.load_json ~big_int_mode:true fname in
-  let le = Entry.t_of_json json in
+  let le = Rpc.Entry.t_of_json json in
   let mtype_info = try 
       Hashtbl.find mtypes le#_type
     with Not_found -> begin
@@ -100,121 +81,69 @@ let process_lifeentry db mtypes rootdir fname =
        failwith (sprintf "unknown mtype %s (we have: %s)" le#_type all_mtypes) 
     end
   in
-  match lifedb_entry_type mtype_info.m_implements with
+  match lifedb_entry_type mtype_info#implements with
   |Contact -> begin
     (* Message is a contact *)
-    let stmt = db#stmt "contactsel" "select id,file_name from contacts where uid=?" in
-    let maybe_text = function |Some x -> Sqlite3.Data.TEXT x |None -> Sqlite3.Data.NULL in
-    let uid = match le#_uid with 
-    |Some x -> Sqlite3.Data.TEXT x |None -> failwith "need _uid field for a contact entry" in
-    stmt#bind1 uid;
-    let abrecord = maybe_text le#abrecord in
-    let firstname = maybe_text le#first_name in
-    let lastname = maybe_text le#last_name in
-    (* insert or update the contacts field *)
-    let contact_id = match stmt#step_once with
-    |0 ->
-       let insstmt = db#stmt "contactins" "insert into contacts values(NULL,?,?,?,?,?);" in
-       insstmt#bind [| (Sqlite3.Data.TEXT fname); uid; abrecord; firstname; lastname |];
-       let _ = insstmt#step_once in
-       (* return the newly inserted rowid by re-selecting *)
-       stmt#bind1 uid;
-       let _ = stmt#step_once in
-       stmt#column 0
-    |_ ->
-       (* the contact does indeed exist, look for the mtime of the existing record *)
-       let existing_mtime = (Entry.t_of_json (Json_io.load_json ~big_int_mode:true (stmt#str_col 1)))#_timestamp in
+    let uid = match le#_uid with
+    |Some x -> x |None -> failwith "need _uid field for a contact entry" in
+    let contact = match Contact.get ~uid:(Some uid) db with
+    |[] -> Contact.t ~uid:uid ~first_name:le#first_name ~last_name:le#last_name ~mtime:le#_timestamp ~file_name:fname db
+    |[c] -> 
+       (* the contact exists, look for the mtime of the existing record *)
+       let existing_mtime = (Rpc.Entry.t_of_json (Json_io.load_json ~big_int_mode:true c#file_name))#_timestamp in
        if existing_mtime < le#_timestamp then begin
          Log.logmod "Mirror" "existing mtime is older, so updating record";
-         let rowid = stmt#column 0 in
-         let stmt = db#stmt "contactup" "update contacts set abrecord=?,first_name=?,last_name=?,file_name=? where id=?" in
-         stmt#bind [| abrecord; firstname; lastname; (Sqlite3.Data.TEXT fname); rowid |];
-         let _ = stmt#step_once in rowid
+         c#set_first_name le#first_name;
+         c#set_last_name le#last_name;
+         c#set_mtime le#_timestamp;
+         c#set_file_name fname;
        end else begin
          Log.logmod "Mirror" "newer contact in db, skipping record";
-         stmt#column 0
-       end
-    in
+       end;
+       c
+    |_ -> assert false in
+    let _ = contact#save in
     (* insert the various services in this contact into people fields *)
     let () = match le#_services with
     |None -> ()
     |Some h ->
        Hashtbl.iter (fun service_name service_ids ->
           List.iter (fun service_id ->
-            let service_name = Sqlite3.Data.TEXT service_name in
-            let service_id = Sqlite3.Data.TEXT service_id in
-            (* look for this unique (service_name,service_id) tuple in the people table  *)
-            let stmt = db#stmt "peoplesel" "select id from people where service_name=? and service_id=?" in
-            stmt#bind2 service_name service_id;
-            match stmt#step_once with
-            |0 ->
-              let stmt = db#stmt "peopleins" "insert into people values(NULL,?,?,?)" in
-              stmt#bind3 service_name service_id contact_id;
-              let _ = stmt#step_once in ()
-            |_ ->
-              let people_id = stmt#column 0 in
-              let stmt = db#stmt "peopleup" "update people set contact_id=? where id=?" in
-              stmt#bind2 contact_id people_id;
-              let _ = stmt#step_once in ()
+            let service = match Service.get ~name:(Some service_name) ~uid:(Some service_id) db with
+            |[] -> Service.t ~name:service_name ~uid:service_id ~contact:(Some contact) db
+            |[s] -> s#set_contact (Some contact); s
+            |_ -> assert false in
+            ignore(service#save)
           ) service_ids
         ) h
      in ()
   end
   |Message ->
-    (* handle message JSON *)
-    let mtype = mtype_info.m_id in
-    let ctime = Sqlite3.Data.INT (Int64.of_float le#_timestamp) in
-    let from_addr = match le#_from with |Some x -> x |None -> failwith "message must have _from" in
     (* take an address hash from the JSON and generate, update or retrieve people records and return the people_id *)
     let process_addr addr =
-       let service_name = try Sqlite3.Data.TEXT (String.lowercase (List.assoc "type" addr)) with Not_found -> failwith "must have type field in addr" in
-       let service_id = try Sqlite3.Data.TEXT (String.lowercase (List.assoc "id" addr)) with Not_found -> failwith "must have id field in addr" in
-       let stmt = db#stmt "peoplesel" "select id from people where service_name=? and service_id=?" in
-       stmt#bind2 service_name service_id;
-       match stmt#step_once with
-       |0 -> begin
-          let insstmt = db#stmt "peopleinsnullcid" "insert into people values(NULL,?,?,NULL)" in
-          insstmt#bind2 service_name service_id; 
-          let _ = insstmt#step_once in
-          stmt#bind2 service_name service_id;
-          let _ = stmt#step_once in
-          stmt#column 0
-       end
-       |_ -> stmt#column 0
-    in
+       let service_name = try String.lowercase (List.assoc "type" addr) with Not_found -> failwith "must have type field in addr" in
+       let service_id = try String.lowercase (List.assoc "id" addr) with Not_found -> failwith "must have id field in addr" in
+       match Service.get ~name:(Some service_name) ~uid:(Some service_id) db with
+       |[] -> let s = Service.t ~name:service_name ~uid:service_id ~contact:None db in ignore(s#save); s
+       |[s] -> s
+       |_ -> assert false in
+    let from = match le#_from with |Some addr -> process_addr addr |None -> failwith "no _from in message" in
+    let recipients = match le#_to with Some addrs -> List.map process_addr addrs |None -> [] in
+    let atts = match le#_att with |None -> []
+      |Some a -> List.fold_left (fun acc b -> match resolve_attachments rootdir fname db b with |None -> acc |Some x -> x :: acc) [] a in
     (* check if this lifedb entry already exists *)
-    let stmt = db#stmt "get_lifedb" "select id from lifedb where filename=?" in
-    stmt#bind1 (Sqlite3.Data.TEXT fname);
-    let people_id = process_addr from_addr in
-    let summary = Sqlite3.Data.TEXT (summaryofmsg le) in
-    let lifedb_id = match stmt#step_once with
-    |0 ->
-        (* brand new lifedb record *)
-        let insstmt = db#stmt "ins_lifedb" "insert into lifedb values(NULL,?,datetime(?,\"unixepoch\"),?,?,?)" in
-        insstmt#bind [| (Sqlite3.Data.TEXT fname); ctime; mtype; people_id; summary |];
-        let _ = insstmt#step_once in
-        stmt#bind1 (Sqlite3.Data.TEXT fname);
-        let _ = stmt#step_once in
-        stmt#column 0;
-    |_ ->
-        let lifedb_id = stmt#column 0 in
-        let stmt = db#stmt "up_lifedb" "update lifedb set ctime=?,mtype=?,people_id=?,summary=? where id=?" in
-        stmt#bind [|ctime;mtype;people_id;lifedb_id;summary |];
-        let _ = stmt#step_once in
-        people_id
-    in 
-    (* resolve the attachments *)
-    (match le#_att with |None -> () | Some a -> List.iter (resolve_attachments rootdir fname lifedb_id db) a);
-    (* process the to entries *)
-    match le#_to with
-    |Some addrs ->
-      List.iter (fun addr ->
-        let people_id = process_addr addr in
-        let stmt = db#stmt "lifedb_to_ins" "insert or ignore into lifedb_to values(?,?)" in
-        stmt#bind2 lifedb_id people_id;
-        let _ = stmt#step_once in ()
-      ) addrs 
-    |None -> ()
+    let e = match Entry.get ~file_name:(Some fname) db with
+    |[] ->
+      Entry.t ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts db
+    |[e] ->
+      e#set_created le#_timestamp;
+      e#set_mtype mtype_info;
+      e#set_from from;
+      e#set_recipients recipients;
+      e#set_atts atts;
+      e
+    |_ -> assert false in
+    ignore(e#save)
 
 let process_directory db mtypes rootdir dir =
   let dh = opendir dir in
@@ -251,41 +180,20 @@ let dir_is_updated db dir mtime =
   |_ -> assert false in
   ignore(dir#save)
 
-let check_directory db syncdb mtypes rootdir dir = 
+let check_directory lifedb syncdb mtypes rootdir dir = 
   match dir_needs_update syncdb dir with
   |Some old_mtime  ->
      Log.logmod "Mirror" "Processing %s" dir;
-     db#transaction (fun () ->
-         process_directory db mtypes rootdir dir;
-         dir_is_updated syncdb dir old_mtime;
-     );
+     process_directory lifedb mtypes rootdir dir;
+     dir_is_updated syncdb dir old_mtime;
   |None -> ()
 
-let init db =
-  db#exec "create table if not exists
-       dircache (dir text primary key, mtime integer)";
-  db#exec "create table if not exists
-       lifedb (id integer primary key autoincrement, filename text, ctime integer, mtype integer, people_id integer, summary text)";
-  db#exec "create unique index if not exists lifedb_filename on lifedb(filename)";
-  db#exec "create table if not exists
-       lifedb_to (lifedb_id integer, people_id integer, primary key(lifedb_id, people_id))";
-  db#exec "create table if not exists
-       contacts (id integer primary key autoincrement, file_name text, uid text, abrecord text, first_name text, last_name text)";
-  db#exec "create table if not exists mtype_map (id integer primary key autoincrement, mtype text, 
-       label text, icon text, implements text)";
-  db#exec "create table if not exists attachments (id integer primary key autoincrement, lifedb_id integer, file_name text)";
-  db#exec "create unique index if not exists contacts_uid on contacts(uid)";
-  db#exec "create unique index if not exists contacts_filename on contacts(file_name)";
-  db#exec "create table if not exists
-       people (id integer primary key autoincrement, service_name text, service_id text, contact_id integer)";
-  db#exec "create unique index if not exists people_svcid on people(service_name, service_id)"
-
-let do_scan ?(subdir="") (db:Sql_access.db) syncdb =
+let do_scan ?(subdir="") lifedb syncdb =
   Log.logmod "Mirror" "Starting scan";
   let lifedb_path = Filename.concat (Lifedb_config.Dir.lifedb ()) subdir in
-  let mtypes = get_all_mtypes db in
+  let mtypes = get_all_mtypes lifedb in
   if not (Lifedb_config.test_mode ()) then
-      walk_directory_tree lifedb_path (check_directory db syncdb mtypes lifedb_path);
+      walk_directory_tree lifedb_path (check_directory lifedb syncdb mtypes lifedb_path);
   Log.logmod "Mirror" "Finished scan"
 
 let dispatch cgi args =

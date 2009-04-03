@@ -11,8 +11,8 @@ let maybe_signal = function
     |Some c -> Condition.signal c
 
 let db_thread () = 
-    let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db()) in
-    Sql_mirror.init db;
+    let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
+    let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
     while true do
         let task, copt = with_lock m (fun () ->
             if Queue.is_empty q then begin
@@ -21,8 +21,8 @@ let db_thread () =
             Queue.take q
         ) in
         begin match task with
-        |`Lifedb -> Sql_mirror.do_scan db
-        |`Plugins -> Lifedb_plugin.do_scan db
+        |`Lifedb -> Sql_mirror.do_scan lifedb syncdb
+        |`Plugins -> Lifedb_plugin.do_scan lifedb
         |`Tasks -> Lifedb_tasks.do_scan ()
         end;
         maybe_signal copt;

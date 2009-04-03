@@ -1,5 +1,3 @@
-(*pp $PP *)
-
 open Utils
 open Printf
 
@@ -18,7 +16,7 @@ let scan_plugin_dir db plugin_dir plugin_info_file =
     let r = object method info=info method dir=plugin_dir end in
     Hashtbl.add plugins info#name r
 
-let do_scan db =
+let do_scan (db:Lifedb_schema.Init.t) =
     Hashtbl.clear plugins;
     Log.logmod "Plugins" "Starting scan";
     List.iter (fun dir ->

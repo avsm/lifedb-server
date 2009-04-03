@@ -16,7 +16,9 @@ USE_CAMLP4 := yes
 SOURCES= client/ocaml/lifedb.ml \
 	custom_unix_stubs.c fork_helper.ml platform.ml utils.ml lifedb_config.ml sql_access.ml log.ml \
 	passwords.ml  \
-	sql_mtype_map.ml sql_mirror.ml \
+        lifedb_schema.ml sync_schema.ml \
+	sql_mtype_map.ml \
+	sql_mirror.ml \
 	lifedb_rpc.ml \
 	lifedb_passwd.ml \
 	db_thread_access.ml \
