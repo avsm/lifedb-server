@@ -13,7 +13,7 @@ let http_config db =
     file_options = [ `Enable_gzip ]
   } in
   let srv = host_distributor
-    [ default_host ~pref_name:"localhost" ~pref_port: 5985 (),
+    [ default_host ~pref_name:"localhost" ~pref_port: (Lifedb_config.port ()) (),
       uri_distributor [
         "*", (options_service());
         "/static", (file_service static);

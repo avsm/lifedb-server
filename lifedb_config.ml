@@ -20,6 +20,9 @@ module Dir = struct
     let static () = !static_dir
 end
 
+let port_val = ref 5985
+let port () = !port_val
+
 let test_mode_val = ref false
 let test_mode () = !test_mode_val
 
@@ -38,6 +41,7 @@ let read_config file =
     Dir.cache_dir := subst conf#cache_directory;
     Dir.config_dir := subst conf#config_directory;
     Dir.static_dir := subst conf#static_directory;
+    port_val := conf#port;
     test_mode_val := conf#test_mode;
     config_filename_val := realpath file
 
@@ -50,5 +54,6 @@ let string_of_config () =
        method config_directory = Dir.config ()
        method static_directory = Dir.static ()
        method test_mode = test_mode ()
+       method port = port ()
     end) in
     Json_io.string_of_json json
