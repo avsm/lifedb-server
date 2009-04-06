@@ -45,5 +45,8 @@ let _ =
   Db_thread_access.push `Plugins;
   Db_thread_access.push `Tasks;
 
+  (* start the p2p sync thread *)
+  Lifedb_user.init ();
+
   (* start listening to HTTP connections *)
   Http_server.init ()

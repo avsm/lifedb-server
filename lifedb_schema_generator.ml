@@ -74,6 +74,7 @@ let sync = make [
     text "ip";
     integer "port";
     text "key";
+    date "last_sync";
     foreign_many "guid" "has_guids";
     foreign_many "guid" "sent_guids";
   ], [];
