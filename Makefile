@@ -31,7 +31,7 @@ SOURCES= client/ocaml/lifedb.ml \
         server.ml
 THREADS=yes
 RESULT=lifedb_server
-PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3 str ANSITerminal cryptokit
+PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 netplex json-static json-wheel uuidm sqlite3 str ANSITerminal cryptokit netclient
 LIBDIRS=/opt/local/lib
 
 PP=./camlp4find $(PACKS)

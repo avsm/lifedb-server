@@ -22,7 +22,18 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
     Log.logmod "URL" "%s" url_path;
     match check_auth cgi with
     (* not authenticated *)
-    |false -> ()
+    |false -> begin
+        try
+            match cgi#request_method, url_hd with
+            |`POST, "sync" ->
+               let arg = mark_post_rpc cgi in
+               Lifedb_user.dispatch_sync lifedb syncdb cgi arg
+            |_ -> raise (Invalid_rpc "Unknown request")
+        with
+        |Invalid_rpc reason ->
+            return_error cgi `Bad_request "Invalid RPC" reason
+    end
+    (* authenticated *)
     |true -> begin
         try 
             match cgi#request_method, url_hd with
@@ -80,6 +91,10 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |`POST, "user" ->
                let arg = mark_post_rpc cgi in
                Lifedb_user.dispatch syncdb env cgi (`Create arg)
+            |`DELETE, "user" ->
+               mark_delete_rpc cgi;
+               let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               Lifedb_user.dispatch syncdb env cgi (`Delete name)
             |_ -> raise (Invalid_rpc "Unknown request")
         with
         |Invalid_rpc reason ->
