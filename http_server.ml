@@ -53,7 +53,7 @@ let init () =
 
   let master_sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   Unix.setsockopt master_sock Unix.SO_REUSEADDR true;
-  Unix.bind master_sock (Unix.ADDR_INET(Unix.inet_addr_any, 5985));
+  Unix.bind master_sock (Unix.ADDR_INET(Unix.inet_addr_any, (Lifedb_config.port ())));
   Unix.listen master_sock 50;
 
   let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in

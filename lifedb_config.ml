@@ -31,7 +31,7 @@ let config_filename () = !config_filename_val
 
 let root_user () = "root"
 
-let read_config file =
+let read_config file test_mode =
     let json = Json_io.load_json file in
     let conf = Lifedb.Rpc.Config.t_of_json json in
     let subst = Str.global_substitute (Str.regexp_string "$HOME") (fun _ -> Sys.getenv("HOME")) in
@@ -42,7 +42,7 @@ let read_config file =
     Dir.config_dir := subst conf#config_directory;
     Dir.static_dir := subst conf#static_directory;
     port_val := conf#port;
-    test_mode_val := conf#test_mode;
+    test_mode_val := test_mode;
     config_filename_val := realpath file
 
 let string_of_config () =
@@ -53,7 +53,6 @@ let string_of_config () =
        method cache_directory = Dir.cache ()
        method config_directory = Dir.config ()
        method static_directory = Dir.static ()
-       method test_mode = test_mode ()
        method port = port ()
     end) in
     Json_io.string_of_json json

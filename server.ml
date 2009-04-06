@@ -1,10 +1,19 @@
 open Printf
 open Utils
 module LD = Lifedb_config.Dir
+open Arg
 
 let _ =
+  let config_file = ref "config.json" in
+  let test_mode = ref false in
+  let spec = [
+      "-conf", Arg.Set_string config_file, "Name of configuration file to use";
+      "-test", Arg.Set test_mode, "Run in test mode";
+  ] in
+  parse spec (fun _ -> ()) ""
+;
   (* start by reading server configuration *)
-  Lifedb_config.read_config "config.json";
+  Lifedb_config.read_config !config_file !test_mode;
 
   (* obtain the master passphrase *)
   let _ = match Platform.get_password (Lifedb_config.root_user ()) with
@@ -15,6 +24,8 @@ let _ =
      Lifedb_rpc.passphrase := p in
   (* start off the stdout logging thread *)
   Log.init ();
+
+  Log.push (`Debug (sprintf "Test mode: %B" !test_mode));
 
   (* the password handling database thread *)
   Lifedb_passwd.init ();

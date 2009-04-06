@@ -12,8 +12,7 @@ module Rpc = struct
       log_directory: string;
       cache_directory: string;
       static_directory: string;
-      port: int;
-      test_mode: bool
+      port: int
     >
   end
 

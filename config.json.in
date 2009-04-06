@@ -5,6 +5,5 @@
   "cache_directory" : "$HOME/Library/Caches/LifeDB",
   "config_directory" : "$HOME/Library/Application Support/LifeDB/Config", 
   "static_directory" : "./htdocs",
-  "port" : 5985,
-  "test_mode" : false
+  "port" : 5985
 }
