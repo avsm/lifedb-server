@@ -30,15 +30,13 @@ let dispatch (db : Sql_access.db) env (cgi : Netcgi.cgi_activation) =
                Lifedb_static.serve_config cgi url_list
             |(`HEAD|`GET), "ping" ->
                 cgi#output#output_string "pong";
-            |`POST, "mirror" -> begin
+            |`POST, "mirror" ->
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg
-            end
-            |`POST, "task" -> begin
+            |`POST, "task" ->
                let arg = mark_post_rpc cgi in
                let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
                Lifedb_tasks.dispatch cgi (`Create (name,arg))
-            end
             |`DELETE, "task" ->
                mark_delete_rpc cgi;
                let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
@@ -61,18 +59,15 @@ let dispatch (db : Sql_access.db) env (cgi : Netcgi.cgi_activation) =
                (match tasksel with
                |"_scan" -> Lifedb_plugin.dispatch cgi `Scan
                |_ -> return_error cgi `Not_found "Unknown plugin request" "Only _scan is valid")
-            |`POST, "passwd_create" -> begin
+            |`POST, "passwd_create" ->
                let arg = mark_post_rpc cgi in
                Lifedb_passwd.dispatch cgi (`Store arg)
-            end
-            |`POST, "passwd_delete" -> begin
+            |`POST, "passwd_delete" ->
                let arg = mark_post_rpc cgi in
                Lifedb_passwd.dispatch cgi (`Delete arg)
-            end
-            |(`GET|`HEAD), "passwd" -> begin
+            |(`GET|`HEAD), "passwd" ->
                mark_get_rpc cgi;
                Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
-            end
             |(`GET|`HEAD), "date" ->
                mark_get_rpc cgi;
                Lifedb_query.dispatch db env cgi (`Date (List.tl url_list))
