@@ -75,5 +75,5 @@ let sync = make [
 
 let _ = 
     Sql_orm.generate ~debug:false lifedb "lifedb_schema";
-    Sql_orm.generate ~debug:true sync "sync_schema";
+    Sql_orm.generate ~debug:false sync "sync_schema";
     ()
