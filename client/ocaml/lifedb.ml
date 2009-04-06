@@ -16,6 +16,16 @@ module Rpc = struct
     >
   end
 
+  module User = struct
+    type json t = <
+      uid: string;
+      fullname: string;
+      ip: string;
+      port: int;
+      key: string
+     >
+  end
+
   module Plugin = struct
     type json t = <
       name : string;

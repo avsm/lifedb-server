@@ -65,10 +65,11 @@ let sync = make [
     date "mtime";
   ],[];
 
-  "users", [
-    text "username";
+  "user", [
+    text "uid";
     text "fullname";
     text "ip";
+    integer "port";
     text "key";
   ], [];
 ]

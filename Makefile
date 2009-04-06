@@ -25,6 +25,7 @@ SOURCES= client/ocaml/lifedb.ml \
 	lifedb_plugin.ml lifedb_tasks.ml \
 	db_thread.ml lifedb_static.ml \
 	lifedb_query.ml \
+        lifedb_user.ml \
 	lifedb_dispatch.ml \
 	http_server.ml \
         server.ml
