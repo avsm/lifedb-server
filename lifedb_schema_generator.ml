@@ -65,12 +65,17 @@ let sync = make [
     date "mtime";
   ],[];
 
+  "guid", [
+    text "guid"
+  ],[];
+
   "user", [
     text "uid";
-    text "fullname";
     text "ip";
     integer "port";
     text "key";
+    foreign_many "guid" "has_guids";
+    foreign_many "guid" "sent_guids";
   ], [];
 ]
 

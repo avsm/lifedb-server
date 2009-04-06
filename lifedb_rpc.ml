@@ -48,13 +48,9 @@ let check_auth cgi =
     try begin
         let authty, authinf = Nethttp.Header.get_authorization cgi#environment#input_header in
         let passwd = Netencoding.Base64.decode (List.assoc "credentials" authinf) in
-        let r = match Str.bounded_split (Str.regexp_string ":") passwd 2 with
+        match Str.bounded_split (Str.regexp_string ":") passwd 2 with
         |[username;passwd] -> check_passwd username passwd
-        |_ -> false in
-        if not r then return_need_auth cgi;
-        r
+        |_ -> false
     end with
-        Not_found -> begin
-            return_need_auth cgi; false
-        end
+        Not_found -> false
 

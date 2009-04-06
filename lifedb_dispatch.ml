@@ -26,9 +26,12 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
         try
             match cgi#request_method, url_hd with
             |`POST, "sync" ->
+               let username = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
                let arg = mark_post_rpc cgi in
-               Lifedb_user.dispatch_sync lifedb syncdb cgi arg
-            |_ -> raise (Invalid_rpc "Unknown request")
+               Log.logmod "Sync" "in sync handler username=%s arg=%s" username arg;
+               Lifedb_user.dispatch_sync lifedb syncdb cgi username arg
+            |_ -> 
+               return_need_auth cgi
         with
         |Invalid_rpc reason ->
             return_error cgi `Bad_request "Invalid RPC" reason

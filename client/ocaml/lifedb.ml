@@ -12,6 +12,7 @@ module Rpc = struct
       log_directory: string;
       cache_directory: string;
       static_directory: string;
+      username: string;
       port: int
     >
   end
@@ -19,11 +20,14 @@ module Rpc = struct
   module User = struct
     type json t = <
       uid: string;
-      fullname: string;
       ip: string;
       port: int;
       key: string
      >
+
+    type json sync = <
+      guids: string list
+    >
   end
 
   module Plugin = struct
