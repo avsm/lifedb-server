@@ -20,52 +20,57 @@ let lifedb = make [
   "attachment" , [
     text "file_name";
     text "mime_type";
-  ], [
-  ];
+  ], [];
 
   "contact" , [
     text "file_name";
-    text "uid";
+    text ~flags:[`Unique; `Index] "uid";
     text ~flags:[`Optional] "first_name";
     text ~flags:[`Optional] "last_name";
     date "mtime";
-  ], [
-  ];
+  ], [];
 
   "mtype" , [
     text "name";
     text "label";
     text ~flags:[`Optional] "icon";
     text "implements";
-  ], [
-  ];
+  ], [];
 
   "service" , [
     text "name";
     text "uid";
     foreign ~flags:[`Optional] "contact" "contact";
-  ],[
-  ];
+  ],[];
+
+  "tag" , [
+    text "name"
+  ], [];
 
   "entry" , [
+    text ~flags:[`Unique; `Index] "uid";
     text "file_name";
     date "created";
     foreign "mtype" "mtype";
     foreign "service" "from";
     foreign_many "service" "recipients";
     foreign_many "attachment" "atts";
-  ],[
-
-  ];
+    foreign_many "tag" "tags";
+  ], [];
 ]
 
 let sync = make [
   "dircache", [
     text "dir";
     date "mtime";
-  ],[
+  ],[];
 
-  ];
+  "users", [
+    text "username";
+    text "fullname";
+    text "ip";
+    text "key";
+  ], [];
 ]
 
 let _ = 

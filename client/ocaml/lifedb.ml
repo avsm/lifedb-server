@@ -70,7 +70,7 @@ module Rpc = struct
     and t = <
       _type: string;
       _timestamp: float;
-      ?_uid : string option;
+      _uid : string;
       ?abrecord: string option;
       ?_from: addr option;
       ?_to: addr list option;
@@ -80,7 +80,8 @@ module Rpc = struct
       ?subject: string option;
       ?duration: int option;
       ?text: string option;
-      ?_att: string list option
+      ?_att: string list option;
+      ?_tags: string list option
     >
     and doc = <
       entry: t;

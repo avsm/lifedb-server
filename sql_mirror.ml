@@ -81,11 +81,10 @@ let process_lifeentry db mtypes rootdir fname =
        failwith (sprintf "unknown mtype %s (we have: %s)" le#_type all_mtypes) 
     end
   in
+  let uid = le#_uid in
   match lifedb_entry_type mtype_info#implements with
   |Contact -> begin
     (* Message is a contact *)
-    let uid = match le#_uid with
-    |Some x -> x |None -> failwith "need _uid field for a contact entry" in
     let contact = match Contact.get ~uid:(Some uid) db with
     |[] -> Contact.t ~uid:uid ~first_name:le#first_name ~last_name:le#last_name ~mtime:le#_timestamp ~file_name:fname db
     |[c] -> 
@@ -131,16 +130,24 @@ let process_lifeentry db mtypes rootdir fname =
     let recipients = match le#_to with Some addrs -> List.map process_addr addrs |None -> [] in
     let atts = match le#_att with |None -> []
       |Some a -> List.fold_left (fun acc b -> match resolve_attachments rootdir fname db b with |None -> acc |Some x -> x :: acc) [] a in
+    let tags = match le#_tags with |None -> [] |Some tl ->
+       List.map (fun name ->
+         match Tag.get ~name:(Some name) db with 
+         |[tag] -> tag
+         |[] -> Tag.t ~name db
+         |_ -> assert false) tl in
     (* check if this lifedb entry already exists *)
     let e = match Entry.get ~file_name:(Some fname) db with
     |[] ->
-      Entry.t ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts db
+      Entry.t ~uid ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts ~tags db
     |[e] ->
       e#set_created le#_timestamp;
       e#set_mtype mtype_info;
       e#set_from from;
       e#set_recipients recipients;
       e#set_atts atts;
+      e#set_tags tags;
+      e#set_uid uid;
       e
     |_ -> assert false in
     ignore(e#save)
