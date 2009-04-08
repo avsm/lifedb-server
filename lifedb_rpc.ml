@@ -9,6 +9,8 @@ type json rpc_result_error = {
 }
   
 exception Invalid_rpc of string
+exception Resource_not_found of string
+exception Resource_conflict of string
 
 let passphrase = ref ""
 

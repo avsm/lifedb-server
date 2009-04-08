@@ -37,7 +37,7 @@ let send_rpc (user:SS.User.t) json =
   |`Failure res -> Log.logmod "User" "FAILED adduser ping: %s" res
 
 let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
-  let uri = sprintf "http://%s:%Lu/sync/%s/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
+  let uri ty = sprintf "http://%s:%Lu/sync/%s/%s/%s" user#ip user#port (Lifedb_config.Dir.username ()) ty entry#uid in
   let fin = open_in entry#file_name in
   try_final (fun () ->
     let res = process (fun () ->
@@ -46,7 +46,7 @@ let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
         Buffer.add_string buf (input_line fin);
       );
       let json = Buffer.contents buf in
-      let http_call = new Http_client.put uri json in
+      let http_call = new Http_client.put (uri "_entry") json in
       let hdr = http_call#request_header `Base in
       hdr#update_field "Content-type" "application/json";
       hdr#update_field "Content-length" (sprintf "%d" (String.length json));
@@ -60,6 +60,11 @@ let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
     |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
   (fun () -> close_in fin)
 
+let find_user db useruid fn =
+  match SS.User.get ~uid:(Some useruid) db with
+  |[user] -> fn user
+  |_ -> raise (Lifedb_rpc.Resource_not_found "unknown user")
+
 let dispatch db env cgi = function
 |`Create arg -> begin
   let u = Rpc.User.t_of_json (Json_io.json_of_string arg) in
@@ -71,9 +76,29 @@ let dispatch db env cgi = function
     Lifedb_rpc.return_error cgi `Bad_request "User already exists" "Already registered"
 end
 |`Delete uid -> begin
-  match SS.User.get ~uid:(Some uid) db with
-  |[user] -> user#delete
-  |_ -> Lifedb_rpc.return_error cgi `Not_found "Unknown user" "User not found"
+  find_user db uid (fun user -> user#delete)
+end
+|`Entry (arg, useruid, fileuid) -> begin
+  find_user db useruid (fun user ->
+    let entry_dir = String.concat "/" [Lifedb_config.Dir.inbox (); user#uid; "entries"] in
+    let fname = Filename.concat entry_dir (fileuid ^ ".lifeentry") in
+    if String.contains fileuid '/' then raise (Lifedb_rpc.Invalid_rpc "bad filename uid");
+    if Sys.file_exists fname then raise (Lifedb_rpc.Resource_conflict "attachment already exists");
+    make_dirs entry_dir;
+    let cout = new Netchannels.output_channel (open_out fname) in
+    Netchannels.with_out_obj_channel cout (fun cout -> cout#output_channel (arg#open_value_rd ()))
+  )
+end
+|`Attachment (arg,useruid,fileuid) -> begin
+  find_user db useruid (fun user ->
+    let att_dir = String.concat "/" [Lifedb_config.Dir.inbox (); user#uid; "_att"] in
+    let fname = Filename.concat att_dir fileuid in
+    if String.contains fileuid '/' then raise (Lifedb_rpc.Invalid_rpc "bad filename uid");
+    if Sys.file_exists fname then raise (Lifedb_rpc.Resource_conflict "attachment already exists");
+    make_dirs att_dir;
+    let cout = new Netchannels.output_channel (open_out fname) in
+    Netchannels.with_out_obj_channel cout (fun cout -> cout#output_channel (arg#open_value_rd ()))
+  )
 end
 
 (* event channel, send it a username to put it on the sync list *)

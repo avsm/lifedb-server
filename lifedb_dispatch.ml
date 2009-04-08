@@ -23,22 +23,25 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
     match check_auth cgi with
     (* not authenticated *)
     |false -> begin
-        try
             match cgi#request_method, url_hd with
             |`POST, "sync" ->
                let username = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
                let arg = mark_post_rpc cgi in
                Log.logmod "Sync" "in sync handler username=%s arg=%s" username arg;
                Lifedb_user.dispatch_sync lifedb syncdb cgi username arg
+            |`PUT arg, "sync" -> begin
+               match url_list with
+               |["sync";useruid;"_att";fileuid] ->
+                 Lifedb_user.dispatch syncdb env cgi (`Attachment (arg, useruid, fileuid))
+               |["sync";useruid;"_entry";fileuid] ->
+                 Lifedb_user.dispatch syncdb env cgi (`Entry (arg, useruid, fileuid))
+               |_ -> raise (Lifedb_rpc.Resource_not_found "unknown PUT request")
+            end
             |_ -> 
                return_need_auth cgi
-        with
-        |Invalid_rpc reason ->
-            return_error cgi `Bad_request "Invalid RPC" reason
     end
     (* authenticated *)
     |true -> begin
-        try 
             match cgi#request_method, url_hd with
             |(`HEAD|`GET), "config" ->
                Lifedb_static.serve_config cgi url_list
@@ -70,9 +73,8 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |`POST, "plugin" ->
                let tasksel = if List.length url_list < 2 then "_scan" else List.nth url_list 1 in
                ignore(mark_post_rpc cgi);
-               (match tasksel with
-               |"_scan" -> Lifedb_plugin.dispatch cgi `Scan
-               |_ -> return_error cgi `Not_found "Unknown plugin request" "Only _scan is valid")
+               if tasksel <> "_scan" then raise (Lifedb_rpc.Resource_not_found "unknown plugin request");
+               Lifedb_plugin.dispatch cgi `Scan
             |`POST, "passwd_create" ->
                let arg = mark_post_rpc cgi in
                Lifedb_passwd.dispatch cgi (`Store arg)
@@ -99,24 +101,26 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
                let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
                Lifedb_user.dispatch syncdb env cgi (`Delete name)
             |_ -> raise (Invalid_rpc "Unknown request")
-        with
-        |Invalid_rpc reason ->
-            return_error cgi `Bad_request "Invalid RPC" reason
     end
 
 
 let handler db lifedb syncdb env cgi =
   let cgi = Netcgi1_compat.Netcgi_types.of_compat_activation cgi in
-  try
-    cgi#set_header~cache:`No_cache ~content_type:"text/html; charset=\"iso-8859-1\"" ();
+  cgi#set_header~cache:`No_cache ~content_type:"text/html; charset=\"iso-8859-1\"" ();
+  begin try
     dispatch db lifedb syncdb env cgi;
-    cgi#output#commit_work();
   with
+  |Resource_not_found reason ->
+    return_error cgi `Not_found "Resource not found" reason
+  |Invalid_rpc reason ->
+    return_error cgi `Bad_request "Invalid RPC" reason
+  |Resource_conflict reason ->
+    return_error cgi `Conflict "Resource conflict" reason
   |error ->
     cgi#output #rollback_work();
     cgi#set_header~status:`Internal_server_error ~cache:`No_cache ~content_type:"text/plain; charset=\"iso-8859-1\"" ();
     cgi#output#output_string "Unexpected software exception:\n";
     cgi#output#output_string (Printexc.to_string error);
     cgi#output#output_string "\n";
-    cgi#output#commit_work ()
-
+  end;
+  cgi#output#commit_work()

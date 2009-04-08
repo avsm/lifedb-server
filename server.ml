@@ -10,8 +10,8 @@ let _ =
       "-conf", Arg.Set_string config_file, "Name of configuration file to use";
       "-test", Arg.Set test_mode, "Run in test mode";
   ] in
-  parse spec (fun _ -> ()) ""
-;
+  parse spec (fun _ -> ()) "";
+
   (* start by reading server configuration *)
   Lifedb_config.read_config !config_file !test_mode;
 
