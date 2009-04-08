@@ -33,7 +33,7 @@ let init () =
   let config_cgi = { Netcgi1_compat.Netcgi_env.default_config with
           Netcgi1_compat.Netcgi_env.permitted_input_content_types =
             [ "application/json"; "application/x-www-form-urlencoded" ];
-          permitted_http_methods = ["GET";"HEAD";"POST";"DELETE"] } in
+          permitted_http_methods = ["GET";"HEAD";"POST";"DELETE";"PUT"] } in
 
   let config : http_reactor_config = object
       method config_timeout_next_request = 15.0
