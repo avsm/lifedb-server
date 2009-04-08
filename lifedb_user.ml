@@ -36,7 +36,7 @@ let send_rpc (user:SS.User.t) json =
   |`Success res -> Log.logmod "User" "Got adduser result: %s" res
   |`Failure res -> Log.logmod "User" "FAILED adduser ping: %s" res
 
-let put_rpc (user:SS.User.t) (entry:LS.Entry.t) =
+let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
   let uri = sprintf "http://%s:%Lu/sync/%s/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
   let fin = open_in entry#file_name in
   try_final (fun () ->
@@ -46,7 +46,14 @@ let put_rpc (user:SS.User.t) (entry:LS.Entry.t) =
         Buffer.add_string buf (input_line fin);
       );
       let json = Buffer.contents buf in
-      http_put_message uri json
+      let http_call = new Http_client.put uri json in
+      let hdr = http_call#request_header `Base in
+      hdr#update_field "Content-type" "application/json";
+      hdr#update_field "Content-length" (sprintf "%d" (String.length json));
+      http_call#set_request_header hdr;
+      p#add http_call;
+      p#run ();
+      http_call
     ) in
     match res with
     |`Success res -> Log.logmod "Upload" "Success to %s (%s): %s" user#uid entry#file_name res
@@ -77,12 +84,26 @@ let uploadreq = Event.new_channel ()
 let upload_thread () =
   let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
+  let p = new Http_client.pipeline in
+  let set_verbose_pipeline () =
+    let opt = p#get_options in
+    p#set_options { opt with 
+      Http_client.verbose_status = true;
+      verbose_request_header = true;
+      verbose_response_header = true;
+      verbose_request_contents = true;
+      verbose_response_contents = true;
+      verbose_connection = true
+    } in
+  set_verbose_pipeline ();
+  p#set_proxy_from_environment ();
+  p#reset ();
   while true do
     let useruid, fileuid = Event.sync (Event.receive uploadreq) in
     Log.logmod "Upload" "Upload request for %s to %s" fileuid useruid;
     match (SS.User.get ~uid:(Some useruid) syncdb), (LS.Entry.get ~uid:(Some fileuid) lifedb)  with
     |[user],[entry] ->
-       put_rpc user entry
+       put_rpc p user entry
     |_ -> Log.logmod "Sync" "WARNING: User %s or entry %s not found" useruid fileuid
   done
 
