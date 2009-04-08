@@ -2,6 +2,8 @@
 let initialized = ref false
 let magic = Hashtbl.create 1
 
+let mime_types = ref []
+
 let read_magic_mime () =
   let fin = open_in "mime.types" in
   let split = Netstring_pcre.split (Pcre.regexp "[ \r\t\n]+") in
@@ -14,7 +16,8 @@ let read_magic_mime () =
           |[] -> ()
           |mime_type :: exts ->
             let m = String.lowercase mime_type in
-            List.iter (fun ext -> Hashtbl.replace magic ext m) exts
+            List.iter (fun ext -> Hashtbl.replace magic ext m) exts;
+            mime_types := mime_type :: !mime_types
       )
     done; ()
   with
@@ -29,3 +32,7 @@ let lookup ext =
   with
     |Not_found -> "application/octet-stream"
 
+let all_mime_types () =
+  if not !initialized then
+    read_magic_mime ();
+  !mime_types

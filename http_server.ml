@@ -32,7 +32,7 @@ let init () =
   Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
   let config_cgi = { Netcgi1_compat.Netcgi_env.default_config with
           Netcgi1_compat.Netcgi_env.permitted_input_content_types =
-            [ "application/json"; "application/x-www-form-urlencoded" ];
+            "application/x-www-form-urlencoded" :: (Magic_mime.all_mime_types ());
           permitted_http_methods = ["GET";"HEAD";"POST";"DELETE";"PUT"] } in
 
   let config : http_reactor_config = object

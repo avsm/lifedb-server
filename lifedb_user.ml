@@ -5,7 +5,6 @@ module LS=Lifedb_schema
 module SS=Sync_schema
 open Http_client.Convenience
 
-
 let process fn =
   let string_of_chan cin =
     let buf = Buffer.create 2048 in
@@ -16,9 +15,12 @@ let process fn =
   in
   try
     let res = fn () in
-    match res#response_status with
-    |`Ok -> `Success (string_of_chan (res#response_body#open_value_rd ()))
-    |_ -> `Failure (string_of_chan (res#response_body#open_value_rd ()))
+    let cin = res#response_body#open_value_rd () in
+    Netchannels.with_in_obj_channel cin (fun cin ->
+      match res#response_status with
+      |`Ok -> `Success (string_of_chan cin)
+      |_ -> `Failure (string_of_chan cin)
+    )
   with
     |Http_client.Http_protocol _ -> `Failure "unknown"
  
@@ -37,33 +39,72 @@ let send_rpc (user:SS.User.t) json =
   |`Failure res -> Log.logmod "User" "FAILED adduser ping: %s" res
 
 let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
-  let uri ty = sprintf "http://%s:%Lu/sync/%s/%s/%s" user#ip user#port (Lifedb_config.Dir.username ()) ty entry#uid in
-  let fin = open_in entry#file_name in
-  try_final (fun () ->
+  let uri = sprintf "http://%s:%Lu/sync/%s/_entry/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
+  let atturi att = sprintf "http://%s:%Lu/sync/%s/_att/%s" user#ip user#port (Lifedb_config.Dir.username ()) (Filename.basename att#file_name) in
+  let failure = ref false in
+  (* drop the attachments in first *)
+  List.iter (fun att ->
     let res = process (fun () ->
-      let buf = Buffer.create 2048 in
-      repeat_until_eof (fun () ->
-        Buffer.add_string buf (input_line fin);
+      let sz = (Unix.stat att#file_name).Unix.st_size in
+      let buf  = Buffer.create sz in
+      let fin = open_in att#file_name in
+      (try
+        Buffer.add_channel buf fin sz;
+       with err ->
+        close_in fin;
+        raise err
       );
-      let json = Buffer.contents buf in
-      let http_call = new Http_client.put (uri "_entry") json in
+      close_in fin;
+      let http_call = new Http_client.put (atturi att) (Buffer.contents buf) in
       let hdr = http_call#request_header `Base in
-      hdr#update_field "Content-type" "application/json";
-      hdr#update_field "Content-length" (sprintf "%d" (String.length json));
+      hdr#update_field "Content-type" att#mime_type;
+      hdr#update_field "Content-length" (sprintf "%d" sz);
       http_call#set_request_header hdr;
+      p#reset ();
       p#add http_call;
       p#run ();
       http_call
     ) in
-    match res with
-    |`Success res -> Log.logmod "Upload" "Success to %s (%s): %s" user#uid entry#file_name res
-    |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
-  (fun () -> close_in fin)
+    match res with 
+    |`Success  res -> Log.logmod "User" "Success uploading attachment %s" att#file_name
+    |`Failure res -> Log.logmod "User" "FAILED uploading attachment %s" att#file_name; failure := true
+  ) entry#atts;
+  if !failure then
+    Log.logmod "User" "Had failures uploading attachments, so not doing entry %s" entry#uid
+  else begin
+    let fin = open_in entry#file_name in
+    try_final (fun () ->
+      let res = process (fun () ->
+        let buf = Buffer.create 2048 in
+        repeat_until_eof (fun () -> Buffer.add_string buf (input_line fin));
+        let json = Buffer.contents buf in
+        let http_call = new Http_client.put uri json in
+        let hdr = http_call#request_header `Base in
+        hdr#update_field "Content-type" "application/json";
+        hdr#update_field "Content-length" (sprintf "%d" (String.length json));
+        http_call#set_request_header hdr;
+        p#reset ();
+        p#add http_call;
+        p#run ();
+        http_call
+      ) in
+      match res with
+      |`Success res -> Log.logmod "Upload" "Success to %s (%s): %s" user#uid entry#file_name res
+      |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
+    (fun () -> close_in fin)
+  end
 
 let find_user db useruid fn =
   match SS.User.get ~uid:(Some useruid) db with
   |[user] -> fn user
   |_ -> raise (Lifedb_rpc.Resource_not_found "unknown user")
+
+let with_in_and_out_obj_channel cin cout fn =
+  Netchannels.with_out_obj_channel cout (fun cout ->
+    Netchannels.with_in_obj_channel cin (fun cin ->
+      fn cin cout
+    )
+  )
 
 let dispatch db env cgi = function
 |`Create arg -> begin
@@ -86,7 +127,8 @@ end
     if Sys.file_exists fname then raise (Lifedb_rpc.Resource_conflict "attachment already exists");
     make_dirs entry_dir;
     let cout = new Netchannels.output_channel (open_out fname) in
-    Netchannels.with_out_obj_channel cout (fun cout -> cout#output_channel (arg#open_value_rd ()))
+    let cin = arg#open_value_rd  () in
+    with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin)
   )
 end
 |`Attachment (arg,useruid,fileuid) -> begin
@@ -94,10 +136,10 @@ end
     let att_dir = String.concat "/" [Lifedb_config.Dir.inbox (); user#uid; "_att"] in
     let fname = Filename.concat att_dir fileuid in
     if String.contains fileuid '/' then raise (Lifedb_rpc.Invalid_rpc "bad filename uid");
-    if Sys.file_exists fname then raise (Lifedb_rpc.Resource_conflict "attachment already exists");
     make_dirs att_dir;
     let cout = new Netchannels.output_channel (open_out fname) in
-    Netchannels.with_out_obj_channel cout (fun cout -> cout#output_channel (arg#open_value_rd ()))
+    let cin = arg#open_value_rd  () in
+    with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin)
   )
 end
 
@@ -116,9 +158,8 @@ let upload_thread () =
       Http_client.verbose_status = true;
       verbose_request_header = true;
       verbose_response_header = true;
-      verbose_request_contents = true;
       verbose_response_contents = true;
-      verbose_connection = true
+      verbose_connection = false
     } in
   set_verbose_pipeline ();
   p#set_proxy_from_environment ();
@@ -127,8 +168,12 @@ let upload_thread () =
     let useruid, fileuid = Event.sync (Event.receive uploadreq) in
     Log.logmod "Upload" "Upload request for %s to %s" fileuid useruid;
     match (SS.User.get ~uid:(Some useruid) syncdb), (LS.Entry.get ~uid:(Some fileuid) lifedb)  with
-    |[user],[entry] ->
-       put_rpc p user entry
+    |[user],[entry] -> begin
+       try
+         put_rpc p user entry
+       with err ->
+         Log.logmod "Sync" "Encountered error syncing %s->%s: %s" user#uid entry#uid (Printexc.to_string err)
+    end
     |_ -> Log.logmod "Sync" "WARNING: User %s or entry %s not found" useruid fileuid
   done
 
