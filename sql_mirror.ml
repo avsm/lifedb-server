@@ -54,7 +54,7 @@ let resolve_attachments rootdir fname db a =
   let rootdir = Filename.dirname (Filename.concat rootdir "foo") in
   let rec checkdir bdir =
       let attfname = String.concat "/" [bdir; "_att"; a] in
-      let mime_type = "XXX" in
+      let mime_type = Magic_mime.lookup (get_extension attfname) in
       if Sys.file_exists attfname then begin
          let a = match Attachment.get ~file_name:(Some attfname) db with
          |[] -> Attachment.t ~file_name:attfname ~mime_type db 
