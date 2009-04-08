@@ -8,6 +8,7 @@ module Dir = struct
     let config_dir = ref ""
     let static_dir = ref ""
     let username_val = ref ""
+    let inbox_dir = ref ""
 
     let lifedb () = !lifedb_dir
     let lifedb_db () = Filename.concat !lifedb_dir "life.db"
@@ -19,6 +20,7 @@ module Dir = struct
     let sync_db () = Filename.concat !config_dir "sync.db"
     let username () = !username_val
     let static () = !static_dir
+    let inbox () = !inbox_dir
 end
 
 let port_val = ref 5985
@@ -42,6 +44,7 @@ let read_config file test_mode =
     Dir.cache_dir := subst conf#cache_directory;
     Dir.config_dir := subst conf#config_directory;
     Dir.static_dir := subst conf#static_directory;
+    Dir.inbox_dir := subst conf#inbox_directory;
     Dir.username_val := conf#username;
     port_val := conf#port;
     test_mode_val := test_mode;
@@ -55,6 +58,7 @@ let string_of_config () =
        method cache_directory = Dir.cache ()
        method config_directory = Dir.config ()
        method static_directory = Dir.static ()
+       method inbox_directory = Dir.inbox ()
        method username = Dir.username ()
        method port = port ()
     end) in

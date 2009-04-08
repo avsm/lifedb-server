@@ -1,5 +1,6 @@
 {
   "lifedb_directory" : "$HOME/Documents/LifeDB",
+  "inbox_directory" : "$HOME/Documents/LifeINBOX",
   "plugins_directory" : [ "$HOME/Library/Application Support/LifeDB/Plugins", "$HOME/src/git/clink/lifedb-plugins.git" ],
   "log_directory" : "$HOME/Library/Application Support/LifeDB/Logs",
   "cache_directory" : "$HOME/Library/Caches/LifeDB",
