@@ -135,6 +135,7 @@ end
     let cout = new Netchannels.output_channel (open_out fname) in
     let cin = arg#open_value_rd  () in
     with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin);
+    Db_thread_access.push `Lifedb;
   )
 end
 |`Attachment (arg,useruid,fileuid) -> begin
@@ -202,6 +203,7 @@ let sync_user lifedb syncdb user =
   List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) filtered_guids_for_user
   
 let sync_thread () =
+  Thread.delay 5.;
   let sync_interval = 60. in
   let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
