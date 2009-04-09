@@ -38,7 +38,7 @@ let send_rpc (user:SS.User.t) json =
   |`Success res -> Log.logmod "User" "Got adduser result: %s" res
   |`Failure res -> Log.logmod "User" "FAILED adduser ping: %s" res
 
-let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
+let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
   let uri = sprintf "http://%s:%Lu/sync/%s/_entry/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
   let atturi att = sprintf "http://%s:%Lu/sync/%s/_att/%s" user#ip user#port (Lifedb_config.Dir.username ()) (Filename.basename att#file_name) in
   let failure = ref false in
@@ -91,7 +91,13 @@ let put_rpc (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
       match res with
       |`Success res -> Log.logmod "Upload" "Success to %s (%s): %s" user#uid entry#file_name res
       |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
-    (fun () -> close_in fin)
+    (fun () -> close_in fin);
+    let find_guid = match SS.Guid.get ~guid:(Some entry#uid) syncdb with
+    |[] -> SS.Guid.t ~guid:entry#uid syncdb
+    |[guid] -> guid
+    |_ -> assert false in
+    user#set_sent_guids (find_guid :: user#sent_guids);
+    ignore(user#save);
   end
 
 let find_user db useruid fn =
@@ -128,7 +134,7 @@ end
     make_dirs entry_dir;
     let cout = new Netchannels.output_channel (open_out fname) in
     let cin = arg#open_value_rd  () in
-    with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin)
+    with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin);
   )
 end
 |`Attachment (arg,useruid,fileuid) -> begin
@@ -143,8 +149,6 @@ end
   )
 end
 
-(* event channel, send it a username to put it on the sync list *)
-let ureq = Event.new_channel ()
 (* upload channel, send it a username/file to upload sequentially *)
 let uploadreq = Event.new_channel ()
 
@@ -170,7 +174,7 @@ let upload_thread () =
     match (SS.User.get ~uid:(Some useruid) syncdb), (LS.Entry.get ~uid:(Some fileuid) lifedb)  with
     |[user],[entry] -> begin
        try
-         put_rpc p user entry
+         put_rpc syncdb p user entry
        with err ->
          Log.logmod "Sync" "Encountered error syncing %s->%s: %s" user#uid entry#uid (Printexc.to_string err)
     end
@@ -178,7 +182,7 @@ let upload_thread () =
   done
 
 let sync_user lifedb syncdb user =
-  Log.logmod "Sync" "sync_user: %s" user#uid;
+  Log.logmod "Sync" "sync_user: %s (has=%s)" user#uid (String.concat "," (List.map (fun e -> e#guid) user#has_guids));
   (* filter criteria hardcoded to all things of mtype com.apple.iphoto with a _to of the user *)
   let all_guids = LS.Entry.get lifedb in
   let photo_guids = List.filter (fun e -> e#mtype#name = "com.apple.iphoto") all_guids in
@@ -188,42 +192,34 @@ let sync_user lifedb syncdb user =
         s#name = "email" && s#uid = user#uid
       ) e#recipients
     ) > 0) photo_guids in
-  List.iter (fun x -> Log.logmod "Sync" "%s %s" x#uid x#file_name) guids_for_user;
-  List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) guids_for_user
+  (* if we've already sent them or user has them already, then filter them out *)
+  let has_uids = List.map (fun g -> g#guid) (user#has_guids @ user#sent_guids) in
+  Log.logmod "User" "user has_uids=%s  for_user=(%s)" (String.concat ", " has_uids) (String.concat ", " (List.map (fun g -> g#uid) guids_for_user));
+  let filtered_guids_for_user = List.filter (fun e ->
+    not (List.mem e#uid has_uids)
+  ) guids_for_user in
+  List.iter (fun x -> Log.logmod "Sync" "%s %s" x#uid x#file_name) filtered_guids_for_user;
+  List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) filtered_guids_for_user
   
 let sync_thread () =
+  let sync_interval = 60. in
   let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
   while true do
-    let uid = Event.sync (Event.receive ureq) in
-    Log.logmod "Sync" "Syncing uid: %s" uid;
-    match SS.User.get ~uid:(Some uid) syncdb with
-    |[user] ->
-       user#set_last_sync (Unix.gettimeofday());
-       sync_user lifedb syncdb user;
-    |_ -> Log.logmod "Sync" "WARNING: User %s not found" uid
-  done
-
-let request_sync uid =
-  Log.logmod "Sync" "Received sync request for %s" uid;
-  Event.sync (Event.send ureq uid)
-
-let scan_thread () =
-  let sync_interval = 10. in (* 10 seconds for now *)
-  let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
-  (* look for users which need a re-sync and request one if it is found *)
-  while true do
      let now = Unix.gettimeofday () in
      List.iter (fun user ->
-       if now -. user#last_sync > sync_interval then
-          request_sync user#uid
+       Log.logmod "Sync" "sync: %s   %.2f - %.2f" user#uid now user#last_sync;
+       if now -. user#last_sync > sync_interval then begin
+         sync_user lifedb syncdb user;
+         user#set_last_sync (Unix.gettimeofday());
+         ignore(user#save);
+       end
      ) (SS.User.get syncdb);
-     Thread.delay 10.
+     Thread.delay 20.;
   done
 
 let init () =
   let _ = Thread.create sync_thread () in
-  let _ = Thread.create scan_thread () in
   let _ = Thread.create upload_thread () in
   ()
 
@@ -236,7 +232,7 @@ let dispatch_sync lifedb syncdb cgi uid arg =
      Log.logmod "Sync" "and some guids: %s" arg;
      user#set_has_guids (List.map (fun g -> SS.Guid.t ~guid:g syncdb) sync#guids);
      ignore(user#save);
-     request_sync uid;
+   (*  request_sync uid; *)
   |_ -> assert false
 
 
