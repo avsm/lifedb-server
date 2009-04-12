@@ -51,7 +51,7 @@ module Rpc = struct
   end
 
   module Task = struct
-    type json t = <
+    type json in_t = <
       plugin: string;
       mode: string;
       silo: string;
@@ -63,12 +63,23 @@ module Rpc = struct
       service: string;
       username: string
     >
-    and r = <
-      info: t;
+    and in_r = <
+      info: in_t;
       duration: float;  (* time the task has been running, float seconds *)
       ?pid: int option
     >
-    and rs = (string,r) Hashtbl.t
+    and in_rs = (string,in_r) Hashtbl.t
+    and out_t = <
+      plugin : string;
+      ?secret : passwd option;
+      ?args: (string, string) Hashtbl.t option
+    >
+    and out_r = <
+      info: out_t;
+      duration: float;
+      ?pid: int option
+    > 
+    and out_rs = (string,out_r) Hashtbl.t
   end
 
   module Entry = struct
