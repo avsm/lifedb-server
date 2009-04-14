@@ -78,6 +78,8 @@ macdist: all
 	cp ./mime.types macdist/bin/mime.types
 	cp ./scripts/run.sh macdist/run_server
 	cp ./scripts/set_passphrase.sh macdist/set_passphrase
+	mkdir -p macdist/plugins
+	cd ../lifedb-plugins.git && make install DEST=$(PWD)/macdist/plugins
 	rm -f mac.tgz
 	tar -zcvf mac.tgz -C macdist .
 
