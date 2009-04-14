@@ -18,7 +18,6 @@ SOURCES= client/ocaml/lifedb.ml \
 	lifedb_config.ml sql_access.ml log.ml \
 	passwords.ml  \
         lifedb_schema.ml sync_schema.ml \
-	sql_mtype_map.ml \
 	sql_mirror.ml \
 	lifedb_rpc.ml \
 	lifedb_passwd.ml \
