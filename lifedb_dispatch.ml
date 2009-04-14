@@ -99,6 +99,13 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
                mark_delete_rpc cgi;
                let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
                Lifedb_user.dispatch syncdb env cgi (`Delete name)
+            |`POST, "filter" ->
+               let arg = mark_post_rpc cgi in
+               let uid = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               Lifedb_user.dispatch syncdb env cgi (`Create_filter (uid,arg))
+            |`DELETE, "filter" ->
+               let uid,name = match url_list with |[_;uid;name] -> uid,name |_ -> "","" in
+               Lifedb_user.dispatch syncdb env cgi (`Delete_filter (uid,name))
             |_ -> raise (Invalid_rpc "Unknown request")
     end
 

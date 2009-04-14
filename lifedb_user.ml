@@ -123,7 +123,7 @@ let dispatch db env cgi = function
   let u = Rpc.User.t_of_json (Json_io.json_of_string arg) in
   match SS.User.get ~uid:(Some u#uid) db with
   |[] ->
-    let user = SS.User.t ~uid:u#uid ~ip:u#ip ~port:(Int64.of_int u#port) ~key:u#key ~sent_guids:[] ~has_guids:[] ~last_sync:0. db in
+    let user = SS.User.t ~uid:u#uid ~ip:u#ip ~port:(Int64.of_int u#port) ~key:u#key ~sent_guids:[] ~has_guids:[] ~filters:[] ~last_sync:0. db in
     ignore(user#save);
   |_ ->
     Lifedb_rpc.return_error cgi `Bad_request "User already exists" "Already registered"
@@ -131,6 +131,23 @@ end
 |`Delete uid -> begin
   find_user db uid (fun user -> user#delete)
 end
+|`Create_filter (useruid,arg) ->
+  let f = Rpc.User.filter_of_json (Json_io.json_of_string arg) in
+  find_user db useruid (fun user ->
+     (* get existing filter list without the currently created one *)
+     let f = SS.Filter_rule.t ~name:f#name ~body:f#body ~zorder:(Int64.of_int f#zorder) db in
+     ignore(f#save);
+     let fs = f :: (List.filter (fun x -> x#name <> f#name) user#filters) in
+     user#set_filters fs;
+     ignore(user#save);
+  )
+|`Delete_filter (useruid,name) ->
+  find_user db useruid (fun user ->
+    let pos,neg = List.partition (fun x -> x#name = name) user#filters in
+    match pos with
+    |[] -> raise (Lifedb_rpc.Resource_not_found "unknown filter")
+    |_ -> user#set_filters neg; ignore(user#save)
+  )
 |`Entry (arg, useruid, fileuid) -> begin
   find_user db useruid (fun user ->
     let entry_dir = String.concat "/" [Lifedb_config.Dir.inbox (); user#uid; "entries"] in

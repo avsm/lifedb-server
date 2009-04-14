@@ -70,6 +70,12 @@ let sync = make [
     text "guid"
   ],[];
 
+  "filter_rule", [
+    text "name";
+    text "body";
+    integer "zorder";
+  ],[];
+
   "user", [
     text "uid";
     text "ip";
@@ -78,6 +84,7 @@ let sync = make [
     date "last_sync";
     foreign_many "guid" "has_guids";
     foreign_many "guid" "sent_guids";
+    foreign_many "filter_rule" "filters";
   ], [];
 ]
 

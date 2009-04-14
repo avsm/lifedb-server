@@ -29,6 +29,13 @@ module Rpc = struct
     type json sync = <
       guids: string list
     >
+
+    type json filter = <
+      name: string;
+      body: string;
+      zorder: int
+    >
+
   end
 
   module Plugin = struct
