@@ -77,6 +77,7 @@ macdist: all
 	cp ./config.json.in macdist/etc/lifedb.config
 	cp ./mime.types macdist/bin/mime.types
 	cp ./scripts/run.sh macdist/run_server
+	cp ./scripts/set_passphrase.sh macdist/set_passphrase
 	rm -f mac.tgz
 	tar -zcvf mac.tgz -C macdist .
 
