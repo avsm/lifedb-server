@@ -65,6 +65,21 @@ scripts:
 	echo export PYTHONPATH=$(PWD)/client/python:$$PYTHONPATH > export-var.sh
 	. ./export-var.sh
 
+.PHONY: macdist
+macdist: all
+	rm -rf macdist
+	mkdir -p macdist/bin
+	mkdir -p macdist/lib
+	mkdir -p macdist/etc
+	cp ./$(RESULT) macdist/bin/
+	cp /opt/local/lib/libpcre.0.dylib macdist/lib/
+	cp /opt/local/lib/libreadline.5.2.dylib macdist/lib/
+	cp ./config.json.in macdist/etc/lifedb.config
+	cp ./mime.types macdist/bin/mime.types
+	cp ./scripts/run.sh macdist/run_server
+	rm -f mac.tgz
+	tar -zcvf mac.tgz -C macdist .
+
 platform.ml: platform_$(PLATFORM).ml
 	cp $< $@
 
