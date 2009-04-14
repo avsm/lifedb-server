@@ -23,7 +23,8 @@ let process fn =
     )
   with
     |Http_client.Http_protocol _ -> `Failure "unknown"
- 
+
+(* send an RPC to a remote user with the specified json string *) 
 let send_rpc (user:SS.User.t) json =
   let uri = sprintf "http://%s:%Lu/sync/%s" user#ip user#port (Lifedb_config.Dir.username ()) in
   let post_raw body =
@@ -35,9 +36,10 @@ let send_rpc (user:SS.User.t) json =
         uri body
      ) in
   match post_raw json with
-  |`Success res -> Log.logmod "User" "Got adduser result: %s" res
-  |`Failure res -> Log.logmod "User" "FAILED adduser ping: %s" res
+  |`Success res -> Log.logmod "User" "send_rpc -> %s: success %s" user#uid res
+  |`Failure res -> Log.logmod "User" "send_rpc -> %s: epic fail %s" user#uid res
 
+(* HTTP PUT some content to a remote user *)
 let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
   let uri = sprintf "http://%s:%Lu/sync/%s/_entry/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
   let atturi att = sprintf "http://%s:%Lu/sync/%s/_att/%s" user#ip user#port (Lifedb_config.Dir.username ()) (Filename.basename att#file_name) in
@@ -100,11 +102,13 @@ let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) 
     ignore(user#save);
   end
 
+(* Lookup a user UID and apply the function over it *)
 let find_user db useruid fn =
   match SS.User.get ~uid:(Some useruid) db with
   |[user] -> fn user
   |_ -> raise (Lifedb_rpc.Resource_not_found "unknown user")
 
+(* Netchannel convenience function to make sure in/out channels are both cleaned up *)
 let with_in_and_out_obj_channel cin cout fn =
   Netchannels.with_out_obj_channel cout (fun cout ->
     Netchannels.with_in_obj_channel cin (fun cin ->
@@ -187,8 +191,8 @@ let upload_thread () =
 
 (* given a user object, synchronize any entries not present on the remote user host,
    by adding them to the upload thread. *)
-let sync_user lifedb syncdb user =
-  Log.logmod "Sync" "sync_user: %s (has=%s)" user#uid (String.concat "," (List.map (fun e -> e#guid) user#has_guids));
+let sync_our_entries_to_user lifedb syncdb user =
+  Log.logmod "Sync" "sync_our_entries_to_user: %s" user#uid;
   (* filter criteria hardcoded to all things of mtype com.apple.iphoto with a _to of the user *)
   let all_guids = LS.Entry.get lifedb in
   let photo_guids = List.filter (fun e -> e#mtype#name = "com.apple.iphoto") all_guids in
@@ -200,11 +204,10 @@ let sync_user lifedb syncdb user =
     ) > 0) photo_guids in
   (* if we've already sent them or user has them already, then filter them out *)
   let has_uids = List.map (fun g -> g#guid) (user#has_guids @ user#sent_guids) in
-  Log.logmod "User" "user has_uids=%s  for_user=(%s)" (String.concat ", " has_uids) (String.concat ", " (List.map (fun g -> g#uid) guids_for_user));
   let filtered_guids_for_user = List.filter (fun e ->
     not (List.mem e#uid has_uids)
   ) guids_for_user in
-  List.iter (fun x -> Log.logmod "Sync" "%s %s" x#uid x#file_name) filtered_guids_for_user;
+  List.iter (fun x -> Log.logmod "Sync" "added upload -> %s: %s" x#uid x#file_name) filtered_guids_for_user;
   List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) filtered_guids_for_user
 
 (* given a user object, send it all the GUIDs we already have to keep it up to date with
@@ -215,25 +218,30 @@ let sync_our_guids_to_user lifedb syncdb user =
   let json = Rpc.User.json_of_sync (object method guids=all_guids end) in 
   send_rpc user (Json_io.string_of_json json)
 
-(* thread to regularly iterate over all users and trigger off a sync request *)  
-let sync_thread () =
-  Thread.delay 5.;
+(* thread to regularly iterate over all users and send off our guids *)
+let sync_guids_to_remote_users_thread lifedb syncdb =
   let sync_interval = 60. in
-  let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
-  let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
-  while true do
-     let now = Unix.gettimeofday () in
-     List.iter (fun user ->
-       Log.logmod "Sync" "sync: %s   %.2f - %.2f" user#uid now user#last_sync;
-       if now -. user#last_sync > sync_interval then begin
-         sync_our_guids_to_user lifedb syncdb user;
-         sync_user lifedb syncdb user;
-         user#set_last_sync (Unix.gettimeofday());
-         ignore(user#save);
-       end
-     ) (SS.User.get syncdb);
-     Thread.delay 20.;
-  done
+  let now = Unix.gettimeofday () in
+  List.iter (fun user ->
+    if now -. user#last_sync > sync_interval then begin
+      sync_our_guids_to_user lifedb syncdb user;
+      user#set_last_sync (Unix.gettimeofday());
+      ignore(user#save);
+    end
+  ) (SS.User.get syncdb)
+
+(* thread to listen to received syncs from users and look for entries they
+   need to add to the upload thread *)
+let sq = Queue.create ()
+let sm = Mutex.create ()
+let sc = Condition.create ()
+let sync_entries_to_remote_users_thread lifedb syncdb =
+  with_lock sm (fun () ->
+    if Queue.is_empty sq then
+      Condition.wait sc sm;
+    let useruid = Queue.take sq in
+    find_user syncdb useruid (sync_our_entries_to_user lifedb syncdb)
+  )
 
 (* received a sync request from another user, so update our has_guids list
  * for that user *)
@@ -241,15 +249,32 @@ let dispatch_sync lifedb syncdb cgi uid arg =
   match SS.User.get ~uid:(Some uid) syncdb with
   |[] -> Lifedb_rpc.return_error cgi `Forbidden "Unknown user" ""
   |[user] -> 
-     Log.logmod "Sync" "GOT SYNC from %s: %s" uid arg;
      let sync = Rpc.User.sync_of_json (Json_io.json_of_string arg) in
-     Log.logmod "Sync" "and some guids: %s" arg;
+     Log.logmod "Sync" "Received sync update <- %s (%d UIDs)" uid (List.length sync#guids);
      user#set_has_guids (List.map (fun g -> SS.Guid.t ~guid:g syncdb) sync#guids);
      ignore(user#save);
+     with_lock sm (fun () ->
+       Queue.push user#uid sq;
+       Condition.signal sc;
+     )
   |_ -> assert false
 
+let thread_with_dbs name fn =
+  Thread.delay 5.;
+  let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
+  let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
+  while true do
+    (try
+      fn lifedb syncdb
+    with exn ->
+      Log.logmod "Sync" "Got exception in thread '%s': %s" name (Printexc.to_string exn)
+    );
+    Thread.delay 20.
+  done
+
 let init () =
-  let _ = Thread.create sync_thread () in
+  let _ = Thread.create (thread_with_dbs "remote_guids") sync_guids_to_remote_users_thread in
+  let _ = Thread.create (thread_with_dbs "remote_entries") sync_entries_to_remote_users_thread in
   let _ = Thread.create upload_thread () in
   ()
 
