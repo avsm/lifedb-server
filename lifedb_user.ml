@@ -112,6 +112,8 @@ let with_in_and_out_obj_channel cin cout fn =
     )
   )
 
+(* User handling fn, to deal with incoming user create/delete and entry create/delete from
+   remote sources *)
 let dispatch db env cgi = function
 |`Create arg -> begin
   let u = Rpc.User.t_of_json (Json_io.json_of_string arg) in
@@ -153,6 +155,7 @@ end
 (* upload channel, send it a username/file to upload sequentially *)
 let uploadreq = Event.new_channel ()
 
+(* upload contents on the upload queue to remote hosts via HTTP PUT *)
 let upload_thread () =
   let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
@@ -182,6 +185,8 @@ let upload_thread () =
     |_ -> Log.logmod "Sync" "WARNING: User %s or entry %s not found" useruid fileuid
   done
 
+(* given a user object, synchronize any entries not present on the remote user host,
+   by adding them to the upload thread. *)
 let sync_user lifedb syncdb user =
   Log.logmod "Sync" "sync_user: %s (has=%s)" user#uid (String.concat "," (List.map (fun e -> e#guid) user#has_guids));
   (* filter criteria hardcoded to all things of mtype com.apple.iphoto with a _to of the user *)
@@ -201,7 +206,16 @@ let sync_user lifedb syncdb user =
   ) guids_for_user in
   List.iter (fun x -> Log.logmod "Sync" "%s %s" x#uid x#file_name) filtered_guids_for_user;
   List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) filtered_guids_for_user
-  
+
+(* given a user object, send it all the GUIDs we already have to keep it up to date with
+   what we might need *)
+let sync_our_guids_to_user lifedb syncdb user =
+  Log.logmod "Sync" "sync_our_guids_to_user: %s" user#uid;
+  let all_guids = LS.Entry.get_uid lifedb in
+  let json = Rpc.User.json_of_sync (object method guids=all_guids end) in 
+  send_rpc user (Json_io.string_of_json json)
+
+(* thread to regularly iterate over all users and trigger off a sync request *)  
 let sync_thread () =
   Thread.delay 5.;
   let sync_interval = 60. in
@@ -212,6 +226,7 @@ let sync_thread () =
      List.iter (fun user ->
        Log.logmod "Sync" "sync: %s   %.2f - %.2f" user#uid now user#last_sync;
        if now -. user#last_sync > sync_interval then begin
+         sync_our_guids_to_user lifedb syncdb user;
          sync_user lifedb syncdb user;
          user#set_last_sync (Unix.gettimeofday());
          ignore(user#save);
@@ -220,11 +235,8 @@ let sync_thread () =
      Thread.delay 20.;
   done
 
-let init () =
-  let _ = Thread.create sync_thread () in
-  let _ = Thread.create upload_thread () in
-  ()
-
+(* received a sync request from another user, so update our has_guids list
+ * for that user *)
 let dispatch_sync lifedb syncdb cgi uid arg =
   match SS.User.get ~uid:(Some uid) syncdb with
   |[] -> Lifedb_rpc.return_error cgi `Forbidden "Unknown user" ""
@@ -234,8 +246,10 @@ let dispatch_sync lifedb syncdb cgi uid arg =
      Log.logmod "Sync" "and some guids: %s" arg;
      user#set_has_guids (List.map (fun g -> SS.Guid.t ~guid:g syncdb) sync#guids);
      ignore(user#save);
-   (*  request_sync uid; *)
   |_ -> assert false
 
-
+let init () =
+  let _ = Thread.create sync_thread () in
+  let _ = Thread.create upload_thread () in
+  ()
 

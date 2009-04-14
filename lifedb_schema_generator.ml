@@ -57,7 +57,7 @@ let lifedb = make [
     foreign_many "attachment" "atts";
     foreign_many "tag" "tags";
     text ~flags:[`Optional] "inbox";
-  ], [];
+  ], [ ["uid"],[] ];
 ]
 
 let sync = make [
