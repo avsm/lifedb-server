@@ -8,11 +8,29 @@ let plugins = Hashtbl.create 1
 let find_plugin name =
     try Some (Hashtbl.find plugins name) with Not_found -> None
 
+let update_mtype db plugin_dir params =
+    let name = params#pltype in
+    let label = params#description in
+    let implements = params#implements in
+    let icon = match params#icon with
+      |None -> None
+      |Some t ->
+         let ft = if Filename.is_relative t then
+            Filename.concat plugin_dir t
+         else t in
+         Some ft
+    in
+    let mtype = match Lifedb_schema.Mtype.get ~name:(Some name) db with
+    |[] -> Lifedb_schema.Mtype.t ~name ~label ~implements ~icon db
+    |[m] -> m#set_label label; m#set_implements implements; m#set_icon icon; m
+    |_ -> assert false in
+    ignore(mtype#save)
+
 let scan_plugin_dir db plugin_dir plugin_info_file =
     let info = Lifedb.Rpc.Plugin.t_of_json (Json_io.load_json plugin_info_file) in
     Log.logmod "Plugins" "registering %s (%s)" info#name 
        (String.concat ", " (List.map (fun x -> x#pltype) info#declares));
-    List.iter (Sql_mtype_map.update db plugin_dir) info#declares;
+    List.iter (update_mtype db plugin_dir) info#declares;
     let r = object method info=info method dir=plugin_dir end in
     Hashtbl.add plugins info#name r
 
