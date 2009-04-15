@@ -4,21 +4,24 @@ module LS=Lifedb_schema
 module SS=Sync_schema
 
 (* return the set of uids which the remote user doesnt have *)
-let filter_new (user:SS.User.t) =
-  Log.logmod "Filter" "Filtering new entries -> %s" user#uid;
+let filter_new (user:SS.User.t) es =
   let has_uids = List.map (fun g -> g#guid) (user#has_guids @ user#sent_guids) in
-  List.filter (fun e -> not (List.mem e#uid has_uids))
+  let f = List.filter (fun e -> not (List.mem e#uid has_uids)) es in
+  Log.logmod "Filter" "Filtering new entries -> %s (%d results)" user#uid (List.length f);
+  f
 
 (* return the set of uids which are addressed to the remote user *)
-let filter_recipients user =
-  Log.logmod "Filter" "Filtering entries addressed to -> %s" user#uid;
-  List.filter (fun e ->
+let filter_recipients user es =
+  let f = List.filter (fun e ->
     List.length (
       List.find_all (fun s ->
         s#name = "email" && s#uid = user#uid
       ) e#recipients
     ) > 0
-  )
+  ) es in
+  Log.logmod "Filter" "Filtering entries addressed to -> %s (%d results)" user#uid (List.length f);
+  f
+
 
 (* apply a single filter and return a set of entries *)
 let apply_filter lifedb syncdb (user:SS.User.t) (entries:LS.Entry.t list) (filter:SS.Filter_rule.t) =

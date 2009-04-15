@@ -32,6 +32,7 @@ let _ =
 
   (* the task manager thread *)
   Lifedb_tasks.init ();
+  Lifedb_out_tasks.init ();
 
   (* make and display various directories used by the server *)
   List.iter (fun (a,b) -> 

@@ -78,6 +78,7 @@ module Rpc = struct
     and in_rs = (string,in_r) Hashtbl.t
     and out_t = <
       plugin : string;
+      pltype : string;
       ?secret : passwd option;
       ?args: (string, string) Hashtbl.t option
     >

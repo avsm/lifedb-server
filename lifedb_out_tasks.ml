@@ -3,6 +3,8 @@
 
 open Printf
 open Utils
+module LS=Lifedb_schema
+module SS=Sync_schema
 
 exception Task_error of string
 exception Internal_task_error of string
@@ -12,18 +14,21 @@ let m = Mutex.create ()
 type task_state = {
    cmd: string;
    plugin: string;
+   mtype: string;
    cwd: string;
    start_time: float; 
    secret: (string * string) option;
    args : (string, string) Hashtbl.t option;
-   outfd: Unix.file_descr option;
-   errfd: Unix.file_descr option;
-   running: Fork_helper.task;
+   mutable outfd: Unix.file_descr option;
+   mutable errfd: Unix.file_descr option;
+   mutable running: Fork_helper.task;
+   mutable uids: string list;
+   mutable files: string list;
 }
 
 let task_list = Hashtbl.create 1
 let task_table_limit = 20
-let task_poll_period = ref 120.
+let task_poll_period = ref 20.
 let task_throttle () = Thread.delay 0.1
 
 let json_of_task name t : Lifedb.Rpc.Task.out_r =
@@ -31,6 +36,7 @@ let json_of_task name t : Lifedb.Rpc.Task.out_r =
       |Some (s,u) -> Some (object method service=s method username=u end) in
    let info : Lifedb.Rpc.Task.out_t = object
        method plugin=t.plugin
+       method pltype=t.mtype
        method secret=secret 
        method args=t.args
    end in
@@ -55,37 +61,15 @@ let find_task name =
     with
        Not_found -> None
 
-let run_command name cmd cwd secret args =
-    assert(not (Mutex.try_lock m));
-    Log.logmod "Tasks" "Executing outbound command '%s' (%s)" name cmd;
-    let env = match secret with |None -> [||] 
-      |Some (s,u) -> begin
-         match Lifedb_passwd.lookup_passwd s u with
-         |Some p -> [| ("LIFEDB_PASSWORD=" ^ p); ("LIFEDB_USERNAME="^u) |] 
-         |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for task '%s'" name; [||]
-      end
-    in
-    let args = match args with |None -> [||]
-      |Some argh -> Array.of_list (Hashtbl.fold (fun k v a -> sprintf "%s=%s" k v :: a) argh []) in
-    let env = Array.append env args in
-    let logdir = Lifedb_config.Dir.log() in
-    let logfile = sprintf "%s/%s.log" logdir name in
-    let errlogfile = sprintf "%s/%s.err" logdir name in
-    let openfdfn f = Unix.handle_unix_error (Unix.openfile f [ Unix.O_APPEND; Unix.O_CREAT; Unix.O_WRONLY]) 0o600 in
-    let outfd = openfdfn logfile in
-    let errfd = openfdfn errlogfile in
-    let logfn fd s = ignore(Unix.write fd s 0 (String.length s)) in
-    let tmstr = current_datetime () in
-    logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
-    logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
-    let env = Array.append env [| "LIFEDB_SYNC_DIR=out";
-      (sprintf "HOME=%s" (Sys.getenv "HOME"));
-      (sprintf "USER=%s" (Sys.getenv "USER")) |] in
-    let cmd = if Lifedb_config.test_mode () then sprintf "sleep %d" (Random.int 5 + 3) else cmd in
-    let task = Fork_helper.create cmd env cwd (logfn outfd) (logfn errfd) in
-    task_throttle ();
-    task, (Some outfd), (Some errfd)
+let find_task_by_mtype mtype =
+    let f = ref None in
+    Hashtbl.iter (fun n t ->
+      if t.mtype = mtype then
+        f := Some (n,t)
+    ) task_list;
+    !f
 
+(* create task descriptor and leave it unstarted *)
 let create_task task_name (p:Lifedb.Rpc.Task.out_t)  =
     assert(not (Mutex.try_lock m));
     if Hashtbl.length task_list >= task_table_limit then
@@ -98,9 +82,8 @@ let create_task task_name (p:Lifedb.Rpc.Task.out_t)  =
     let secret = match p#secret with 
       |None -> None
       |Some s -> Some (s#service, s#username) in
-    let task_status, outfd, errfd = run_command task_name pl#cmd cwd secret p#args  in
     let now_time = Unix.gettimeofday () in 
-    let task = { cmd=pl#cmd; outfd=outfd; errfd=errfd; cwd=cwd; plugin=pl#name; secret=secret; start_time=now_time; running=task_status; args=p#args } in
+    let task = { cmd=pl#cmd; outfd=None; errfd=None; cwd=cwd; plugin=pl#name; secret=secret; start_time=now_time; running=(Fork_helper.blank_task ()); args=p#args; uids=[]; files=[]; mtype=p#pltype } in
     Hashtbl.add task_list task_name task;
     Log.logmod "Tasks" "Created outbound task '%s' %s" task_name (string_of_task task)
 
@@ -130,6 +113,7 @@ let delete_task name =
         Log.push (`Plugin (name, time_taken, exit_code));
     |None -> ()
 
+(* remove the task entirely *)
 let destroy_task name =
     assert(not (Mutex.try_lock m));
     match find_task name with
@@ -141,26 +125,100 @@ let destroy_task name =
     end
     |None -> raise (Task_error "task not found")
 
-let task_sweep () =
-    Hashtbl.iter (fun name task ->
-       let td = string_of_task task in
-       match Fork_helper.status_of_task task.running with
-       |Fork_helper.Running pid ->
-           Log.logmod "Sweep" "%s ... %s" name td
-       |Fork_helper.Not_started ->
-           let curtime = Unix.gettimeofday () in
-           if task.start_time < curtime then begin
-               let task_status, outfd, errfd = run_command name task.cmd task.cwd task.secret task.args in
-               let task = { task with outfd=outfd; errfd=errfd; start_time=curtime; running=task_status } in
-               Hashtbl.replace task_list name task
-           end
-       |Fork_helper.Done exit_code ->
-           Log.logmod "Sweep" "%s ... finished %s" name td;
-           delete_task name;
-       |Fork_helper.Killed signal ->
-           Log.logmod "Sweep" "%s ... crashed %s" name td;
-           delete_task name;
-    ) task_list
+(* split up a list of entris into a hashtable of their respective mtypes *)
+let partition_entries_into_mtypes lifedb es =
+  let h = Hashtbl.create 1 in
+  List.iter (fun e ->
+    if not (Hashtbl.mem h e#mtype#name) then
+      Hashtbl.add h e#mtype#name [];
+    Hashtbl.replace h e#mtype#name (e :: (Hashtbl.find h e#mtype#name))
+  ) es;
+  h
+
+let start_task name =
+  let t = Hashtbl.find task_list name in
+  assert(not (Mutex.try_lock m));
+  Log.logmod "Tasks" "Executing outbound command '%s' (%s)" name t.cmd;
+  let env = match t.secret with 
+  |None -> [||] 
+  |Some (s,u) -> begin
+    match Lifedb_passwd.lookup_passwd s u with
+    |Some p -> [| ("LIFEDB_PASSWORD=" ^ p); ("LIFEDB_USERNAME="^u) |] 
+    |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for task '%s'" name; [||]
+  end in
+  (* add environment arguments *)
+  let args = match t.args with
+  |None -> [||]
+  |Some argh -> Array.of_list (Hashtbl.fold (fun k v a -> sprintf "%s=%s" k v :: a) argh [])
+  in
+  let env = Array.append env args in
+  let logdir = Lifedb_config.Dir.log() in
+  let logfile = sprintf "%s/%s.log" logdir name in
+  let errlogfile = sprintf "%s/%s.err" logdir name in
+  let openfdfn f = Unix.handle_unix_error (Unix.openfile f [ Unix.O_APPEND; Unix.O_CREAT; Unix.O_WRONLY]) 0o600 in
+  let outfd = openfdfn logfile in
+  let errfd = openfdfn errlogfile in
+  let logfn fd s = ignore(Unix.write fd s 0 (String.length s)) in
+  let tmstr = current_datetime () in
+  logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
+  logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
+  let env = Array.append env [| "LIFEDB_SYNC_DIR=out";
+    (sprintf "HOME=%s" (Sys.getenv "HOME"));
+    (sprintf "USER=%s" (Sys.getenv "USER")) |] in
+  let cmd = 
+    if Lifedb_config.test_mode () then
+      sprintf "sleep %d" (Random.int 5 + 3)
+    else
+      (* XXX check shell escaping here!! *)
+      sprintf "%s %s" t.cmd (String.concat " " (List.map String.escaped t.files))
+  in
+  let ts = Fork_helper.create cmd env t.cwd (logfn outfd) (logfn errfd) in
+  task_throttle ();
+  t.running <- ts;
+  t.outfd <- Some outfd;
+  t.errfd <- Some errfd
+
+(* Look for items in the INBOX with a pltype matching an active plugin, and schedule it
+   if so *)
+let task_sweep lifedb syncdb () =
+  (* for each user, look for entries in the inbox to them *)
+  List.iter (fun (user:SS.User.t) ->
+    let es = LS.Entry.get_by_inbox ~inbox:(Some user#uid) lifedb in
+    match es with
+    |[] -> ()
+    |es -> begin
+      (* we have inbox entries, look for a plugin to handle each mtype *)
+      let h = partition_entries_into_mtypes lifedb es in
+      Hashtbl.iter (fun mtype_name es ->
+        (* look for an output task to handle this mtype name *)
+        match find_task_by_mtype mtype_name with
+        |None ->
+          Log.logmod "Task" "Unable to find output task for <- %s : %s" mtype_name user#uid
+        |Some (name,t) -> begin
+          match Fork_helper.status_of_task t.running with
+          |Fork_helper.Not_started ->
+            (* set the entry UIDs and kick the command off *)
+            t.uids <- List.map (fun e -> e#uid) es;
+            t.files <- List.map (fun e -> e#file_name) es;
+            start_task name
+          |_ ->
+            Log.logmod "Task" "Pending INBOX items, but already running %s" name
+        end
+      ) h
+    end
+  ) (SS.User.get syncdb);
+  Hashtbl.iter (fun name task ->
+    let td = string_of_task task in
+    match Fork_helper.status_of_task task.running with
+    |Fork_helper.Running pid ->
+      Log.logmod "Sweep" "%s ... %s" name td
+    |Fork_helper.Not_started -> ()
+    |Fork_helper.Done exit_code ->
+      Log.logmod "Sweep" "%s ... finished %s" name td;
+      (* XXX mark UIDs as finished in db *)
+    |Fork_helper.Killed signal ->
+      Log.logmod "Sweep" "%s ... crashed %s" name td;
+  ) task_list
 
 let dispatch cgi = function
    |`Create (name,p) ->
@@ -204,38 +262,41 @@ let dispatch cgi = function
 let c = Condition.create ()
 let cm = Mutex.create ()
 let task_thread () =
-    while true do
-        with_lock cm (fun () ->
-            Condition.wait c cm;
-            with_lock m task_sweep;
-        )
-    done
+  let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
+  let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
+  while true do
+    with_lock cm (fun () ->
+      Condition.wait c cm;
+      with_lock m (task_sweep lifedb syncdb);
+    )
+  done
 
 (* thread to kick the sweeping thread regularly to update task status. *)
 let task_regular_kick () =
-    while true do
-        with_lock cm (fun () ->
-            Condition.signal c
-        );
-        Thread.delay !task_poll_period
-    done
+  while true do
+    with_lock cm (fun () ->
+      Condition.signal c
+    );
+    Thread.delay !task_poll_period
+  done
 
 (* scan the config directory and spawn tasks *)
 let config_file_extension = ".outconf"
 let scan_config_file config_file =
-    Log.logmod "Tasks" "Scanning config file %s" config_file;
-    let task = Lifedb.Rpc.Task.out_t_of_json (Json_io.load_json config_file) in
-    let task_name = Filename.chop_suffix (Filename.basename config_file) config_file_extension  in
-    match Lifedb_plugin.find_plugin task#plugin with
-      |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task_name;
-      |Some _ ->
-        Log.logmod "Tasks" "Added '%s' (plugin %s)" task_name task#plugin;
-        let task : Lifedb.Rpc.Task.out_t = object
-          method plugin=task#plugin
-          method secret=task#secret
-          method args=task#args
-        end in
-        with_lock m (fun () -> find_or_create_task task_name task)
+  Log.logmod "Tasks" "Scanning config file %s" config_file;
+  let task = Lifedb.Rpc.Task.out_t_of_json (Json_io.load_json config_file) in
+  let task_name = Filename.chop_suffix (Filename.basename config_file) config_file_extension  in
+  match Lifedb_plugin.find_plugin task#plugin with
+    |None -> Log.logmod "Tasks" "Plugin '%s' not found for task '%s', skipping it" task#plugin task_name;
+    |Some _ ->
+      Log.logmod "Tasks" "Added '%s' (plugin %s)" task_name task#plugin;
+      let task : Lifedb.Rpc.Task.out_t = object
+        method plugin=task#plugin
+        method secret=task#secret
+        method args=task#args
+        method pltype=task#pltype
+      end in
+      with_lock m (fun () -> find_or_create_task task_name task)
 
 let do_scan () =
     let config_dir = Lifedb_config.Dir.config () in

@@ -31,11 +31,11 @@ let lifedb = make [
   ], [];
 
   "mtype" , [
-    text "name";
+    text ~flags:[`Unique; `Index] "name";
     text "label";
     text ~flags:[`Optional] "icon";
     text "implements";
-  ], [];
+  ], [ [],["name"] ];
 
   "service" , [
     text "name";
@@ -56,8 +56,8 @@ let lifedb = make [
     foreign_many "service" "recipients";
     foreign_many "attachment" "atts";
     foreign_many "tag" "tags";
-    text ~flags:[`Optional] "inbox";
-  ], [ ["uid"],[] ];
+    text ~flags:[`Optional; `Index] "inbox";
+  ], [ ["uid"],[]; [],["inbox"] ];
 ]
 
 let sync = make [
