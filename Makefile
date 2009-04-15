@@ -23,7 +23,7 @@ SOURCES= client/ocaml/lifedb.ml \
 	lifedb_passwd.ml \
 	db_thread_access.ml \
 	lifedb_plugin.ml lifedb_tasks.ml \
-        lifedb_user.ml \
+	lifedb_filter.ml lifedb_user.ml \
         lifedb_out_tasks.ml \
 	db_thread.ml lifedb_static.ml \
 	lifedb_query.ml \

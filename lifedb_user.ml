@@ -210,22 +210,9 @@ let upload_thread () =
    by adding them to the upload thread. *)
 let sync_our_entries_to_user lifedb syncdb user =
   Log.logmod "Sync" "sync_our_entries_to_user: %s" user#uid;
-  (* filter criteria hardcoded to all things of mtype com.apple.iphoto with a _to of the user *)
-  let all_guids = LS.Entry.get lifedb in
-  let photo_guids = List.filter (fun e -> e#mtype#name = "com.apple.iphoto") all_guids in
-  let guids_for_user = List.filter (fun e ->
-    List.length (
-      List.find_all (fun s ->
-        s#name = "email" && s#uid = user#uid
-      ) e#recipients
-    ) > 0) photo_guids in
-  (* if we've already sent them or user has them already, then filter them out *)
-  let has_uids = List.map (fun g -> g#guid) (user#has_guids @ user#sent_guids) in
-  let filtered_guids_for_user = List.filter (fun e ->
-    not (List.mem e#uid has_uids)
-  ) guids_for_user in
-  List.iter (fun x -> Log.logmod "Sync" "added upload -> %s: %s" x#uid x#file_name) filtered_guids_for_user;
-  List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) filtered_guids_for_user
+  let uids = Lifedb_filter.apply_filters lifedb syncdb user in
+  List.iter (fun x -> Log.logmod "Sync" "added upload -> %s: %s" x#uid x#file_name) uids;
+  List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) uids
 
 (* given a user object, send it all the GUIDs we already have to keep it up to date with
    what we might need *)
@@ -269,6 +256,7 @@ let dispatch_sync lifedb syncdb cgi uid arg =
      let sync = Rpc.User.sync_of_json (Json_io.json_of_string arg) in
      Log.logmod "Sync" "Received sync update <- %s (%d UIDs)" uid (List.length sync#guids);
      user#set_has_guids (List.map (fun g -> SS.Guid.t ~guid:g syncdb) sync#guids);
+     (* XXX reset the sent guids here? what if remote user has deleted and doesnt want them back *)
      ignore(user#save);
      with_lock sm (fun () ->
        Queue.push user#uid sq;
