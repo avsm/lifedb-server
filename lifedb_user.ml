@@ -36,8 +36,8 @@ let send_rpc (user:SS.User.t) json =
         uri body
      ) in
   match post_raw json with
-  |`Success res -> Log.logmod "User" "send_rpc -> %s: success %s" user#uid res
-  |`Failure res -> Log.logmod "User" "send_rpc -> %s: epic fail %s" user#uid res
+  |`Success res -> Log.logmod "RPC" "-> %s: success (res: %s)" user#uid res
+  |`Failure res -> Log.logmod "RPC" "-> %s: epic fail (res: %s)" user#uid res
 
 (* HTTP PUT some content to a remote user *)
 let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
@@ -177,6 +177,7 @@ let upload_thread () =
   let lifedb = LS.Init.t (Lifedb_config.Dir.lifedb_db ()) in
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
   let p = new Http_client.pipeline in
+  (*
   let set_verbose_pipeline () =
     let opt = p#get_options in
     p#set_options { opt with 
@@ -186,7 +187,7 @@ let upload_thread () =
       verbose_response_contents = true;
       verbose_connection = false
     } in
-  (* set_verbose_pipeline (); *)
+  set_verbose_pipeline (); *)
   p#set_proxy_from_environment ();
   p#reset ();
   while true do
@@ -205,7 +206,7 @@ let upload_thread () =
 (* given a user object, synchronize any entries not present on the remote user host,
    by adding them to the upload thread. *)
 let sync_our_entries_to_user lifedb syncdb user =
-  Log.logmod "Sync" "sync_our_entries_to_user: %s" user#uid;
+  Log.logmod "Sync" "Our entries -> %s" user#uid;
   let uids = Lifedb_filter.apply_filters lifedb syncdb user in
   List.iter (fun x -> Log.logmod "Sync" "added upload -> %s: %s" x#uid x#file_name) uids;
   List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) uids
@@ -213,7 +214,7 @@ let sync_our_entries_to_user lifedb syncdb user =
 (* given a user object, send it all the GUIDs we already have to keep it up to date with
    what we might need *)
 let sync_our_guids_to_user lifedb syncdb user =
-  Log.logmod "Sync" "sync_our_guids_to_user: %s" user#uid;
+  Log.logmod "Sync" "Our GUIDS -> %s" user#uid;
   let all_guids = LS.Entry.get_uid lifedb in
   let json = Rpc.User.json_of_sync (object method guids=all_guids end) in 
   send_rpc user (Json_io.string_of_json json)
@@ -250,7 +251,7 @@ let dispatch_sync lifedb syncdb cgi uid arg =
   |[] -> Lifedb_rpc.return_error cgi `Forbidden "Unknown user" ""
   |[user] -> 
      let sync = Rpc.User.sync_of_json (Json_io.json_of_string arg) in
-     Log.logmod "Sync" "Received sync update <- %s (%d UIDs)" uid (List.length sync#guids);
+     Log.logmod "Sync" "Received GUID update <- %s (%d UIDs)" uid (List.length sync#guids);
      user#set_has_guids (blob_of_guids sync#guids);
      (* XXX reset the sent guids here? what if remote user has deleted and doesnt want them back *)
      user#set_sent_guids (blob_of_guids []); 
