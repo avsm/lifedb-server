@@ -24,24 +24,6 @@ let lifedb_entry_type = function
   |"public.message" -> Message
   |x -> failwith (sprintf "unknown implementation type %s" x)
 
-let summarykey js = 
-  let sopt = function
-  |None -> None
-  |Some x -> Some (sprintf "%d seconds" x) in
-  match js#_type with
-  |"com.clinklabs.email" -> js#subject
-  |"com.apple.iphone.sms" -> js#text
-  |"com.apple.iphone.call" -> sopt js#duration
-  |"com.skype" -> sopt js#duration
-  |"com.twitter" -> js#text
-  |"com.adium" -> js#text
-  |x -> failwith ("summarykey:" ^ x)
-
-let summaryofmsg js : string =
-  match summarykey js with
-  |None -> "<none>"
-  |Some x -> if String.length x > 50 then String.sub x 0 50 ^ "..." else x
-
 let get_all_mtypes db =
   let h = Hashtbl.create 1 in
   List.iter (fun m -> Hashtbl.add h m#name m) (Mtype.get db);
