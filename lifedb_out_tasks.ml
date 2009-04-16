@@ -92,9 +92,8 @@ let find_or_create_task name (t:Lifedb.Rpc.Task.out_t) =
     |Some _ -> ()
     |None -> create_task name t
 
-(* remove the task entry from the hashtable and close
-   any logging fds *)
-let delete_task name =
+(* close any logging fds, reset fields *)
+let reset_task name =
     assert(not (Mutex.try_lock m));
     let closeopt task = function
     |None -> ()
@@ -105,12 +104,16 @@ let delete_task name =
     in
     match find_task name with
     |Some task -> 
-        closeopt task task.outfd;
-        closeopt task task.errfd;
-        Hashtbl.remove task_list name;
         let time_taken = (Unix.gettimeofday ()) -. task.start_time in
         let exit_code = Fork_helper.exit_code_of_task task.running in
         Log.push (`Plugin (name, time_taken, exit_code));
+        closeopt task task.outfd;
+        closeopt task task.errfd;
+        task.outfd <- None;
+        task.errfd <- None;
+        task.running <- Fork_helper.blank_task ();
+        task.uids <- [];
+        task.files <- [];
     |None -> ()
 
 (* remove the task entirely *)
@@ -119,7 +122,8 @@ let destroy_task name =
     match find_task name with
     |Some task -> begin
         let final_status = Fork_helper.destroy task.running in
-        delete_task name;
+        reset_task name;
+        Hashtbl.remove task_list name;
         Log.logmod "Tasks" "Outbound task %s destroyed: %s" name 
             (Fork_helper.string_of_status final_status);
     end
@@ -183,7 +187,7 @@ let start_task name =
 let task_sweep lifedb syncdb () =
   (* for each user, look for entries in the inbox to them *)
   List.iter (fun (user:SS.User.t) ->
-    let es = LS.Entry.get_by_inbox ~inbox:(Some user#uid) lifedb in
+    let es = LS.Entry.get_by_inbox_delivered ~inbox:(Some user#uid) ~delivered:0L lifedb in
     match es with
     |[] -> ()
     |es -> begin
@@ -215,9 +219,21 @@ let task_sweep lifedb syncdb () =
     |Fork_helper.Not_started -> ()
     |Fork_helper.Done exit_code ->
       Log.logmod "Sweep" "%s ... finished %s" name td;
-      (* XXX mark UIDs as finished in db *)
+      if exit_code = 0 then begin
+        (* successfully delivered msgs, so mark them in the DB as delivered *)
+        List.iter (fun uid ->
+          match LS.Entry.get_by_uid ~uid lifedb with
+          |[e] ->
+            Log.logmod "Task" "Successfully delivered: %s" e#file_name;
+            e#set_delivered 1L;
+            ignore(e#save)
+          |_ -> ()
+        ) task.uids;
+      end;
+      reset_task name;
     |Fork_helper.Killed signal ->
       Log.logmod "Sweep" "%s ... crashed %s" name td;
+      reset_task name;
   ) task_list
 
 let dispatch cgi = function

@@ -31,16 +31,17 @@ let get_all_mtypes db =
 
 (* to resolve an attachment, we look for an _att directory one level up, and keep
    looking until we hit the root lifedb directory *)
-let resolve_attachments rootdir fname db a =
+let resolve_attachments rootdir fname db uid =
   (* normalize rootdir *)
   let rootdir = Filename.dirname (Filename.concat rootdir "foo") in
   let rec checkdir bdir =
-      let attfname = String.concat "/" [bdir; "_att"; a] in
-      let mime_type = Magic_mime.lookup (get_extension attfname) in
+      let attfname = String.concat "/" [bdir; "_att"; uid] in
       if Sys.file_exists attfname then begin
-         let a = match Attachment.get ~file_name:(Some attfname) db with
-         |[] -> Attachment.t ~file_name:attfname ~mime_type db 
-         |[a] -> a#set_mime_type mime_type; a
+         let a = match Attachment.get_by_file_name attfname db with
+         |[] ->
+            let mime_type = Magic_mime.lookup (get_extension attfname) in
+            Attachment.t ~file_name:attfname ~mime_type db 
+         |[a] -> a
          |_ -> assert false in
          Some a
       end else begin
@@ -121,7 +122,7 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
     (* check if this lifedb entry already exists *)
     let e = match Entry.get ~file_name:(Some fname) db with
     |[] ->
-      Entry.t ~uid ~inbox ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts ~tags db
+      Entry.t ~uid ~inbox ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts ~tags ~delivered:0L db
     |[e] ->
       e#set_created le#_timestamp;
       e#set_mtype mtype_info;
@@ -130,6 +131,7 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
       e#set_atts atts;
       e#set_tags tags;
       e#set_uid uid;
+      (* XXX e#set_delivered? *)
       e
     |_ -> assert false in
     ignore(e#save)

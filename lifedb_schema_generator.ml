@@ -18,9 +18,9 @@ open Sql_orm.Schema
 
 let lifedb = make [
   "attachment" , [
-    text "file_name";
+    text ~flags:[`Unique; `Index] "file_name";
     text "mime_type";
-  ], [];
+  ], [ [], ["file_name"] ];
 
   "contact" , [
     text "file_name";
@@ -57,17 +57,14 @@ let lifedb = make [
     foreign_many "attachment" "atts";
     foreign_many "tag" "tags";
     text ~flags:[`Optional; `Index] "inbox";
-  ], [ ["uid"],[]; [],["inbox"] ];
+    integer "delivered";
+  ], [ ["uid"],[]; [],["inbox";"delivered"]; [],["uid"] ];
 ]
 
 let sync = make [
   "dircache", [
     text "dir";
     date "mtime";
-  ],[];
-
-  "guid", [
-    text "guid"
   ],[];
 
   "filter_rule", [
@@ -82,11 +79,12 @@ let sync = make [
     integer "port";
     text "key";
     date "last_sync";
-    foreign_many "guid" "has_guids";
-    foreign_many "guid" "sent_guids";
+    blob "has_guids";
+    blob "sent_guids";
     foreign_many "filter_rule" "filters";
   ], [];
-]
+
+]  
 
 let _ = 
     Sql_orm.generate ~debug:false lifedb "lifedb_schema";

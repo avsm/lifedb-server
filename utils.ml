@@ -54,3 +54,13 @@ let get_extension name =
     else search_dot (i - 1) in
   search_dot (String.length name - 1)
 
+let guids_of_blob b =
+  Str.split (Str.regexp_string "|") b
+
+let blob_of_guids gs =
+  String.concat "|" gs
+
+let add_guids_to_blob b gs =
+  blob_of_guids (guids_of_blob b @ gs)
+
+

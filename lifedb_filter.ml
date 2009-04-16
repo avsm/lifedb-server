@@ -5,7 +5,7 @@ module SS=Sync_schema
 
 (* return the set of uids which the remote user doesnt have *)
 let filter_new (user:SS.User.t) es =
-  let has_uids = List.map (fun g -> g#guid) (user#has_guids @ user#sent_guids) in
+  let has_uids = (guids_of_blob user#has_guids) @ (guids_of_blob user#sent_guids) in
   let f = List.filter (fun e -> not (List.mem e#uid has_uids)) es in
   Log.logmod "Filter" "Filtering new entries -> %s (%d results)" user#uid (List.length f);
   f

@@ -94,11 +94,7 @@ let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) 
       |`Success res -> Log.logmod "Upload" "Success to %s (%s): %s" user#uid entry#file_name res
       |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
     (fun () -> close_in fin);
-    let find_guid = match SS.Guid.get ~guid:(Some entry#uid) syncdb with
-    |[] -> SS.Guid.t ~guid:entry#uid syncdb
-    |[guid] -> guid
-    |_ -> assert false in
-    user#set_sent_guids (find_guid :: user#sent_guids);
+    user#set_sent_guids (add_guids_to_blob user#sent_guids [entry#uid]);
     ignore(user#save);
   end
 
@@ -123,7 +119,7 @@ let dispatch db env cgi = function
   let u = Rpc.User.t_of_json (Json_io.json_of_string arg) in
   match SS.User.get ~uid:(Some u#uid) db with
   |[] ->
-    let user = SS.User.t ~uid:u#uid ~ip:u#ip ~port:(Int64.of_int u#port) ~key:u#key ~sent_guids:[] ~has_guids:[] ~filters:[] ~last_sync:0. db in
+    let user = SS.User.t ~uid:u#uid ~ip:u#ip ~port:(Int64.of_int u#port) ~key:u#key ~sent_guids:(blob_of_guids []) ~has_guids:(blob_of_guids []) ~filters:[] ~last_sync:0. db in
     ignore(user#save);
   |_ ->
     Lifedb_rpc.return_error cgi `Bad_request "User already exists" "Already registered"
@@ -190,7 +186,7 @@ let upload_thread () =
       verbose_response_contents = true;
       verbose_connection = false
     } in
-  set_verbose_pipeline ();
+  (* set_verbose_pipeline (); *)
   p#set_proxy_from_environment ();
   p#reset ();
   while true do
@@ -255,8 +251,9 @@ let dispatch_sync lifedb syncdb cgi uid arg =
   |[user] -> 
      let sync = Rpc.User.sync_of_json (Json_io.json_of_string arg) in
      Log.logmod "Sync" "Received sync update <- %s (%d UIDs)" uid (List.length sync#guids);
-     user#set_has_guids (List.map (fun g -> SS.Guid.t ~guid:g syncdb) sync#guids);
+     user#set_has_guids (blob_of_guids sync#guids);
      (* XXX reset the sent guids here? what if remote user has deleted and doesnt want them back *)
+     user#set_sent_guids (blob_of_guids []); 
      ignore(user#save);
      with_lock sm (fun () ->
        Queue.push user#uid sq;

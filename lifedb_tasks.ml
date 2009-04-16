@@ -30,7 +30,7 @@ type task_state = {
 
 let task_list = Hashtbl.create 1
 let task_table_limit = 10
-let task_poll_period = ref 120.
+let task_poll_period = ref 15.
 let task_throttle () = Thread.delay 0.1
 
 let json_of_task name t : Lifedb.Rpc.Task.in_r =
