@@ -64,6 +64,8 @@ scripts:
 	echo export PYTHONPATH=$(PWD)/client/python:$$PYTHONPATH > export-var.sh
 	. ./export-var.sh
 
+WANTLIB=libz.1 libsqlite3.0 libpcre.0 libreadline.5.2 libncurses.5
+
 .PHONY: macdist
 macdist: all
 	rm -rf macdist
@@ -71,14 +73,13 @@ macdist: all
 	mkdir -p macdist/lib
 	mkdir -p macdist/etc
 	cp ./$(RESULT) macdist/bin/
-	cp /opt/local/lib/libpcre.0.dylib macdist/lib/
-	cp /opt/local/lib/libreadline.5.2.dylib macdist/lib/
-	cp ./config.json.in macdist/etc/lifedb.config
+	for i in $(WANTLIB); do cp /opt/local/lib/$$i.dylib macdist/lib/$$i.dylib; done
+	cp ./config.json.in macdist/etc/lifedb.config.in
 	cp ./mime.types macdist/bin/mime.types
 	cp ./scripts/run.sh macdist/run_server
 	cp ./scripts/set_passphrase.sh macdist/set_passphrase
 	mkdir -p macdist/plugins
-	cd ../lifedb-plugins.git && make install DEST=$(PWD)/macdist/plugins
+	cd ../plugins && make install DEST=$(PWD)/macdist/plugins ETC=$(PWD)/macdist/etc
 	rm -f mac.tgz
 	tar -zcvf mac.tgz -C macdist .
 
