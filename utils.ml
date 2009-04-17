@@ -63,4 +63,12 @@ let blob_of_guids gs =
 let add_guids_to_blob b gs =
   blob_of_guids (guids_of_blob b @ gs)
 
-
+(* return a list of maximum size sz *)
+let list_max_size sz l =
+  let rec fn a = function
+  |[] -> List.rev a
+  |hd::tl when (List.length a < (sz-1)) ->
+    fn (hd::a) tl
+  |hd::tl ->
+    List.rev (hd::a)
+  in fn [] l

@@ -142,7 +142,6 @@ let partition_entries_into_mtypes lifedb es =
 let start_task name =
   let t = Hashtbl.find task_list name in
   assert(not (Mutex.try_lock m));
-  Log.logmod "Tasks" "Executing outbound command '%s' (%s)" name t.cmd;
   let env = match t.secret with 
   |None -> [||] 
   |Some (s,u) -> begin
@@ -177,6 +176,7 @@ let start_task name =
       sprintf "%s %s" t.cmd (String.concat " " (List.map String.escaped t.files))
   in
   let ts = Fork_helper.create cmd env t.cwd (logfn outfd) (logfn errfd) in
+  Log.logmod "Tasks" "Executing outbound command '%s' (%s)" name cmd;
   task_throttle ();
   t.running <- ts;
   t.outfd <- Some outfd;
@@ -191,6 +191,8 @@ let task_sweep lifedb syncdb () =
     match es with
     |[] -> ()
     |es -> begin
+      (* constrain es to only 50 entries at a time to avoid overloading output plugin *)
+      let es = list_max_size 50 es in
       (* we have inbox entries, look for a plugin to handle each mtype *)
       let h = partition_entries_into_mtypes lifedb es in
       Hashtbl.iter (fun mtype_name es ->
