@@ -120,7 +120,7 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
          |[] -> Tag.t ~name db
          |_ -> assert false) tl in
     (* check if this lifedb entry already exists *)
-    let e = match Entry.get ~file_name:(Some fname) db with
+    let e = match Entry.get_by_file_name fname db with
     |[] ->
       Entry.t ~uid ~inbox ~file_name:fname ~created:le#_timestamp ~mtype:mtype_info ~from ~recipients ~atts ~tags ~delivered:0L db
     |[e] ->
@@ -138,22 +138,18 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
 
 let process_directory ~inbox db mtypes rootdir dir =
   let dh = opendir dir in
-  let counter = ref 0 in
-  begin
-  try while true do
-     incr counter;
-     if !counter mod 100 == 0 then (); (* printf ".%!"; *)
-     let h = readdir dh in
-     if Filename.check_suffix h ".lifeentry" then begin
+  try_final (fun () ->
+    repeat_until_eof (fun () ->
+      let h = readdir dh in
+      if Filename.check_suffix h ".lifeentry" then begin
         let fname = sprintf "%s/%s" dir h in
         try
            process_lifeentry ~inbox db mtypes rootdir fname
         with e -> 
            Log.logmod "Mirror" "Exception in %s: %s" fname (Printexc.to_string e)
-     end
-  done with End_of_file -> ()
-  end;
-  closedir dh
+      end
+    )
+  ) (fun () -> closedir dh)
   
 let dir_needs_update db dir =
   try

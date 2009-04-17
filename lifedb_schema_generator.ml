@@ -58,7 +58,7 @@ let lifedb = make [
     foreign_many "tag" "tags";
     text ~flags:[`Optional; `Index] "inbox";
     integer "delivered";
-  ], [ ["uid"],[]; [],["inbox";"delivered"]; [],["uid"] ];
+  ], [ ["uid"],[]; [],["inbox";"delivered"]; [],["uid"] ; [],["file_name"]];
 ]
 
 let sync = make [
