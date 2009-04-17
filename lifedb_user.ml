@@ -154,6 +154,7 @@ end
     let cout = new Netchannels.output_channel (open_out fname) in
     let cin = arg#open_value_rd  () in
     with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin);
+    Db_thread_access.throttle_request ();
     Db_thread_access.push `Lifedb;
   )
 end
@@ -247,6 +248,7 @@ let sync_entries_to_remote_users_thread lifedb syncdb =
 (* received a sync request from another user, so update our has_guids list
  * for that user *)
 let dispatch_sync lifedb syncdb cgi uid arg =
+  Db_thread_access.throttle_request ();
   match SS.User.get ~uid:(Some uid) syncdb with
   |[] -> Lifedb_rpc.return_error cgi `Forbidden "Unknown user" ""
   |[user] -> 

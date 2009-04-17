@@ -136,10 +136,11 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
     |_ -> assert false in
     ignore(e#save)
 
-let process_directory ~inbox db mtypes rootdir dir =
+let process_directory ~inbox db throttle_check mtypes rootdir dir =
   let dh = opendir dir in
   try_final (fun () ->
     repeat_until_eof (fun () ->
+      throttle_check ();
       let h = readdir dh in
       if Filename.check_suffix h ".lifeentry" then begin
         let fname = sprintf "%s/%s" dir h in
@@ -167,28 +168,28 @@ let dir_is_updated db dir mtime =
   |_ -> assert false in
   ignore(dir#save)
 
-let check_directory ?(inbox=None) lifedb syncdb mtypes rootdir dir = 
+let check_directory ?(inbox=None) lifedb syncdb throttle_check mtypes rootdir dir = 
   match dir_needs_update syncdb dir with
   |Some old_mtime  ->
      Log.logmod "Mirror" "Processing %s" dir;
-     process_directory ~inbox lifedb mtypes rootdir dir;
+     process_directory ~inbox lifedb throttle_check mtypes rootdir dir;
      dir_is_updated syncdb dir old_mtime;
   |None -> ()
 
-let do_scan ?(subdir="") lifedb syncdb =
+let do_scan ?(subdir="") lifedb syncdb throttle_check =
   Log.logmod "Mirror" "Starting scan";
   let lifedb_path = Filename.concat (Lifedb_config.Dir.lifedb ()) subdir in
   let inbox_path = Lifedb_config.Dir.inbox () in
   let mtypes = get_all_mtypes lifedb in
   if not (Lifedb_config.test_mode ()) then begin
-      walk_directory_tree lifedb_path (check_directory lifedb syncdb mtypes lifedb_path);
+      walk_directory_tree lifedb_path (check_directory lifedb syncdb throttle_check mtypes lifedb_path);
       if Sys.file_exists inbox_path && (Sys.is_directory inbox_path) then begin
         let dh = opendir inbox_path in
         try_final (fun () ->
           repeat_until_eof (fun () ->
             let folder = read_next_dir dh in
             let inbox_path = Filename.concat inbox_path folder in
-            walk_directory_tree inbox_path (check_directory ~inbox:(Some folder) lifedb syncdb mtypes inbox_path);
+            walk_directory_tree inbox_path (check_directory ~inbox:(Some folder) lifedb syncdb throttle_check mtypes inbox_path);
           );
         ) (fun () -> closedir dh)
       end

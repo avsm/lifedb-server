@@ -40,6 +40,23 @@ let push ?(copt=(None:Condition.t option)) (req:scan_request) =
         with Queue.Empty -> pushit ());
     )
 
+let tm = Mutex.create ()
+let tb = ref false
+
+let throttle_check () =
+    let sl = with_lock tm (fun () ->
+      if !tb then (tb := false; true) else false
+    ) in
+    if sl then (
+      Log.logmod "Throttle" "sleeping...";
+      Thread.delay 10.;
+    )
+
+let throttle_request () =
+   with_lock tm (fun () ->
+      tb := true
+   )
+
 let push_sync req =
     let c' = Condition.create () in
     let m' = Mutex.create () in

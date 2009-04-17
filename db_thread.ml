@@ -21,8 +21,8 @@ let db_thread () =
             Queue.take q
         ) in
         begin match task with
-        |`Lifedb -> Sql_mirror.do_scan lifedb syncdb
-        |`Plugins -> Lifedb_plugin.do_scan lifedb
+        |`Lifedb -> Sql_mirror.do_scan lifedb syncdb throttle_check
+        |`Plugins -> Lifedb_plugin.do_scan lifedb 
         |`Tasks -> Lifedb_tasks.do_scan ()
         |`Out_tasks -> Lifedb_out_tasks.do_scan ()
         end;
