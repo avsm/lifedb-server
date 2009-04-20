@@ -130,7 +130,9 @@ let process_lifeentry ~inbox db mtypes rootdir fname =
       e#set_recipients recipients;
       e#set_atts atts;
       e#set_tags tags;
-      e#set_uid uid;
+      (* ensure that the UID in the database is the same as the one on file already; this should not change and is unique *)
+      if e#uid <> uid then
+         failwith (sprintf "%s <> %s uid" e#uid uid);
       (* XXX e#set_delivered? *)
       e
     |_ -> assert false in
@@ -142,7 +144,8 @@ let process_directory ~inbox db throttle_check mtypes rootdir dir =
     repeat_until_eof (fun () ->
       throttle_check ();
       let h = readdir dh in
-      if Filename.check_suffix h ".lifeentry" then begin
+      let kind = try (Unix.stat h).Unix.st_kind with _ -> Unix.S_SOCK in
+      if Filename.check_suffix h ".lifeentry" && (kind = Unix.S_REG) then begin
         let fname = sprintf "%s/%s" dir h in
         try
            process_lifeentry ~inbox db mtypes rootdir fname
