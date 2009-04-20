@@ -10,9 +10,14 @@ let maybe_signal = function
     |None -> ()
     |Some c -> Condition.signal c
 
-let db_thread () = 
-    let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
-    let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
+let db_thread () =
+    let busyfn db =
+       Log.logmod "Db_thread" "Mirror thread contention, backing off for 30ish seconds";
+       Thread.delay (30. +. (Random.float 5.))
+    in
+    let lifedb = Lifedb_schema.Init.t ~busyfn (Lifedb_config.Dir.lifedb_db ()) in
+    let syncdb = Sync_schema.Init.t ~busyfn (Lifedb_config.Dir.sync_db ()) in
+    let lifedb' = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
     while true do
         let task, copt = with_lock m (fun () ->
             if Queue.is_empty q then begin
@@ -22,7 +27,7 @@ let db_thread () =
         ) in
         begin match task with
         |`Lifedb -> Sql_mirror.do_scan lifedb syncdb throttle_check
-        |`Plugins -> Lifedb_plugin.do_scan lifedb 
+        |`Plugins -> Lifedb_plugin.do_scan lifedb'
         |`Tasks -> Lifedb_tasks.do_scan ()
         |`Out_tasks -> Lifedb_out_tasks.do_scan ()
         end;
