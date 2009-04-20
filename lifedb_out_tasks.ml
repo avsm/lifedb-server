@@ -165,7 +165,7 @@ let start_task name =
   let tmstr = current_datetime () in
   logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
   logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
-  let env = Array.append env [| "LIFEDB_SYNC_DIR=out";
+  let env = Array.append env [| "LIFEDB_SYNC_DIR=out"; (sprintf "LIFEDB_UID_MAP=%s" (Lifedb_config.Dir.uidmap ()));
     (sprintf "HOME=%s" (Sys.getenv "HOME"));
     (sprintf "USER=%s" (Sys.getenv "USER")) |] in
   let cmd = 

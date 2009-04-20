@@ -13,6 +13,7 @@ module Dir = struct
     let lifedb () = !lifedb_dir
     let lifedb_db () = Filename.concat !lifedb_dir "life.db"
     let cache () = !cache_dir
+    let uidmap () = Filename.concat !cache_dir "_uidmap"
     let log () = !log_dir
     let plugins () = !plugins_dir
     let config () = !config_dir

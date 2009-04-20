@@ -102,6 +102,7 @@ let run_command name cmd cwd secret args silo =
     make_dirs lifedb_cache_dir;
     let env = Array.append env [| sprintf "LIFEDB_DIR=%s" lifedb_config_dir;
       (sprintf "LIFEDB_CACHE_DIR=%s" lifedb_cache_dir);
+      (sprintf "LIFEDB_UID_MAP=%s" (Lifedb_config.Dir.uidmap ()));
       "LIFEDB_SYNC_DIR=in";
       (sprintf "HOME=%s" (Sys.getenv "HOME"));
       (sprintf "USER=%s" (Sys.getenv "USER")) |] in

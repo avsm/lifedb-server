@@ -37,7 +37,7 @@ let _ =
   (* make and display various directories used by the server *)
   List.iter (fun (a,b) -> 
     Log.push (`Debug (sprintf "%s dir = %s" a b));
-    make_dirs b) [ "LifeDB", (LD.lifedb()); "Log", (LD.log()); "Cache", (LD.cache()); "Config", (LD.config()); "Inbox", (LD.inbox()) ];
+    make_dirs b) [ "LifeDB", (LD.lifedb()); "Log", (LD.log()); "Cache", (LD.cache()); "Config", (LD.config()); "Inbox", (LD.inbox()); "UIDMap", (LD.uidmap()) ];
   Log.push (`Debug (sprintf "Plugin scan dirs = [%s]" (String.concat " | " (LD.plugins()))));
 
   (* begin the db threads and do a plugin/task scan at start of day *)
