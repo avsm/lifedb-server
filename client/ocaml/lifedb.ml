@@ -25,6 +25,10 @@ module Rpc = struct
       port: int;
       key: string
      >
+    and ts = <
+      results: int;
+      rows: t list
+    >
 
     type json sync = <
       guids: string list

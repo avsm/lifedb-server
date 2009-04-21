@@ -172,6 +172,18 @@ end
     with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin)
   )
 end
+|`Get useruid -> begin 
+  find_user db useruid (fun user ->
+    let t = object method uid=user#uid method ip=user#ip method port=Int64.to_int user#port method key=user#key end in
+    cgi#output#output_string (Json_io.string_of_json (Rpc.User.json_of_t t))
+  )
+end
+|`List -> begin
+  let r = List.map (fun user ->
+    object method uid=user#uid method ip=user#ip method port=Int64.to_int user#port method key=user#key end) (SS.User.get db) in
+  let tr = object method results=List.length r method rows=r end in
+  cgi#output#output_string (Json_io.string_of_json (Rpc.User.json_of_ts tr))
+end
 
 (* upload channel, send it a username/file to upload sequentially *)
 let uploadreq = Event.new_channel ()
