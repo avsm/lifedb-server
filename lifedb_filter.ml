@@ -7,7 +7,7 @@ module SS=Sync_schema
 let filter_new (user:SS.User.t) es =
   let has_uids = (guids_of_blob user#has_guids) @ (guids_of_blob user#sent_guids) in
   let f = List.filter (fun e -> not (List.mem e#uid has_uids)) es in
-  Log.logmod "Filter" "Filtering new entries -> %s (%d results)" user#uid (List.length f);
+  Log.logmod "Filter" "Filtering new entries -> %s (%d orig, %d results)" user#uid (List.length es) (List.length f);
   f
 
 (* return the set of uids which are addressed to the remote user *)

@@ -49,7 +49,7 @@ let throttle_check () =
     ) in
     if sl then (
       Log.logmod "Throttle" "sleeping...";
-      Thread.delay 10.;
+      Thread.delay 60.;
     )
 
 let throttle_request () =

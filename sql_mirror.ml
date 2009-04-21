@@ -144,8 +144,7 @@ let process_directory ~inbox db throttle_check mtypes rootdir dir =
     repeat_until_eof (fun () ->
       throttle_check ();
       let h = readdir dh in
-      let kind = try (Unix.stat h).Unix.st_kind with _ -> Unix.S_SOCK in
-      if Filename.check_suffix h ".lifeentry" && (kind = Unix.S_REG) then begin
+      if Filename.check_suffix h ".lifeentry" then begin
         let fname = sprintf "%s/%s" dir h in
         try
            process_lifeentry ~inbox db mtypes rootdir fname
