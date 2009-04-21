@@ -117,9 +117,9 @@ let create_task task_name (p:Lifedb.Rpc.Task.in_t)  =
        raise (Task_error "too many tasks already registered");
     if String.contains task_name '.' || (String.contains task_name '/') then
        raise (Task_error "task name cant contain . or /");
-    let pl,cwd = match Lifedb_plugin.find_plugin p#plugin with
+    let pl = match Lifedb_plugin.find_plugin p#plugin with
       |None -> raise (Task_error (sprintf "plugin %s not found" p#plugin))
-      |Some x -> x#info, x#dir in
+      |Some x -> x in
     let mode = match String.lowercase p#mode, p#period with
       |"periodic", (Some p) -> Periodic p
       |"single",_ -> Single
@@ -128,9 +128,9 @@ let create_task task_name (p:Lifedb.Rpc.Task.in_t)  =
     let secret = match p#secret with 
       |None -> None
       |Some s -> Some (s#service, s#username) in
-    let task_status, outfd, errfd = run_command task_name pl#cmd cwd secret p#args p#silo in
+    let task_status, outfd, errfd = run_command task_name pl#cmd pl#dir secret p#args p#silo in
     let now_time = Unix.gettimeofday () in 
-    let task = { cmd=pl#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=cwd; silo=p#silo;
+    let task = { cmd=pl#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=pl#dir; silo=p#silo;
        plugin=pl#name; secret=secret; start_time=now_time; running=task_status; args=p#args } in
     Hashtbl.add task_list task_name task;
     Log.logmod "Tasks" "Created task '%s' %s" task_name (string_of_task task)

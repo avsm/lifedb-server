@@ -31,7 +31,7 @@ let scan_plugin_dir db plugin_dir plugin_info_file =
     Log.logmod "Plugins" "registering %s (%s)" info#name 
        (String.concat ", " (List.map (fun x -> x#pltype) info#declares));
     List.iter (update_mtype db plugin_dir) info#declares;
-    let r = object method info=info method dir=plugin_dir end in
+    let r = object method name=info#name method cmd=info#cmd method dir=plugin_dir method declares=info#declares  end in
     Hashtbl.add plugins info#name r
 
 let do_scan (db:Lifedb_schema.Init.t) =
@@ -56,13 +56,15 @@ let dispatch cgi = function
        with_lock m (fun () ->
            match find_plugin name with
            |Some r ->
-               cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_r r))
+               cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_tr r))
            |None ->
                Lifedb_rpc.return_error cgi `Not_found "Plugin error" "Plugin not found"
        )
    |`List ->
        with_lock m (fun () ->
-           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_ts plugins))
+           let r = Hashtbl.fold (fun k v a -> v :: a) plugins [] in
+           let tr = object method results=List.length r method rows=r end in
+           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_rs tr))
        )
    |`Scan ->
        Db_thread_access.push_sync `Plugins

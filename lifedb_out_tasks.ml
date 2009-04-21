@@ -76,14 +76,14 @@ let create_task task_name (p:Lifedb.Rpc.Task.out_t)  =
        raise (Task_error "too many tasks already registered");
     if String.contains task_name '.' || (String.contains task_name '/') then
        raise (Task_error "task name cant contain . or /");
-    let pl,cwd = match Lifedb_plugin.find_plugin p#plugin with
+    let pl = match Lifedb_plugin.find_plugin p#plugin with
       |None -> raise (Task_error (sprintf "plugin %s not found" p#plugin))
-      |Some x -> x#info, x#dir in
+      |Some x -> x in
     let secret = match p#secret with 
       |None -> None
       |Some s -> Some (s#service, s#username) in
     let now_time = Unix.gettimeofday () in 
-    let task = { cmd=pl#cmd; outfd=None; errfd=None; cwd=cwd; plugin=pl#name; secret=secret; start_time=now_time; running=(Fork_helper.blank_task ()); args=p#args; uids=[]; files=[]; mtype=p#pltype } in
+    let task = { cmd=pl#cmd; outfd=None; errfd=None; cwd=pl#dir; plugin=pl#name; secret=secret; start_time=now_time; running=(Fork_helper.blank_task ()); args=p#args; uids=[]; files=[]; mtype=p#pltype } in
     Hashtbl.add task_list task_name task;
     Log.logmod "Tasks" "Created outbound task '%s' %s" task_name (string_of_task task)
 

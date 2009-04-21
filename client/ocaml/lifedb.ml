@@ -43,17 +43,22 @@ module Rpc = struct
       name : string;
       cmd : string;
       declares: decl list
-      >
+      > 
+    and tr = <
+      name : string;
+      cmd : string;
+      declares: decl list;
+      dir : string
+    >
     and decl = <
       pltype : string;
       description : string;
       implements : string;
       ?icon : string option
-    > and r = <
-      info: t;
-      dir: string
+    > and rs = <
+      results: int;
+      rows: tr list
     >
-    and ts = (string, r) Hashtbl.t
     and decls = decl list
   end
 

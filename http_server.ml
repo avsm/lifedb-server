@@ -4,11 +4,11 @@ open Nethttpd_reactor
 open Printf
 
 let http_config db lifedb syncdb =
+  let mime_types = read_media_types_file "./mime.types" in
   let static = {
     file_docroot = Lifedb_config.Dir.static ();
     file_uri = "/static";
-    file_suffix_types = [ "txt", "text/plain";
-              "html", "text/html" ];
+    file_suffix_types = mime_types;
     file_default_type = "application/octet-stream";
     file_options = [ `Enable_gzip ]
   } in
@@ -56,19 +56,18 @@ let init () =
   Unix.bind master_sock (Unix.ADDR_INET(Unix.inet_addr_any, (Lifedb_config.port ())));
   Unix.listen master_sock 50;
 
-  let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
-  let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
-  let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
-  let http_config = http_config db lifedb syncdb in
+  let http_config () =
+    let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
+    let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
+    let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
+    http_config db lifedb syncdb in
   while true do
     try
       Gc.compact ();
       let conn_sock, _ = Unix.accept master_sock in
       Unix.set_nonblock conn_sock;
-      (*
       let _ = Thread.create (process_connection config conn_sock) (http_config ()) in
-      *)
-      process_connection config conn_sock http_config;
+      (* process_connection config conn_sock http_config; *)
       ()
     with
         Unix.Unix_error(Unix.EINTR,_,_) -> () 
