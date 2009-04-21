@@ -74,7 +74,7 @@ let sync = make [
   ],[];
 
   "user", [
-    text "uid";
+    text ~flags:[`Unique; `Index] "uid";
     text "ip";
     integer "port";
     text "key";
