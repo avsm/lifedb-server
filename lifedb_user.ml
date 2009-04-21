@@ -119,13 +119,22 @@ let with_in_and_out_obj_channel cin cout fn =
    remote sources *)
 let dispatch db env cgi = function
 |`Create arg -> begin
+  Log.logmod "DebugUser" "%s" arg;
   let u = Rpc.User.t_of_json (Json_io.json_of_string arg) in
   match SS.User.get ~uid:(Some u#uid) db with
   |[] ->
+    Log.logmod "DebugUser" "adding ";
     let user = SS.User.t ~uid:u#uid ~ip:u#ip ~port:(Int64.of_int u#port) ~key:u#key ~sent_guids:(blob_of_guids []) ~has_guids:(blob_of_guids []) ~filters:[] ~last_sync:0. db in
     ignore(user#save);
+  |[user] ->
+    Log.logmod "DebugUser" "already exists so edit";
+    user#set_uid u#uid;
+    user#set_ip u#ip;
+    user#set_port (Int64.of_int u#port);
+    user#set_key u#key;
+    ignore(user#save);
   |_ ->
-    Lifedb_rpc.return_error cgi `Bad_request "User already exists" "Already registered"
+    Lifedb_rpc.return_error cgi `Bad_request "Internal error" "Multiple users found with same uid";
 end
 |`Delete uid -> begin
   find_user db uid (fun user -> user#delete)
