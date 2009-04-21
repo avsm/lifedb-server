@@ -38,8 +38,8 @@ Ext.onReady(function(){
         saveText: 'Update'
     });
 
-    // create the grid
-    var grid = new Ext.grid.GridPanel({
+    // create the user_grid
+    var user_grid = new Ext.grid.GridPanel({
         store: store,
         title: 'Users',
         plugins: [editor],
@@ -83,8 +83,8 @@ Ext.onReady(function(){
                });
                editor.stopEditing();
                store.insert(0, u);
-               grid.getView().refresh();
-               grid.getSelectionModel().selectRow(0);
+               user_grid.getView().refresh();
+               user_grid.getSelectionModel().selectRow(0);
                editor.startEditing(0);
             }
         },
@@ -94,8 +94,8 @@ Ext.onReady(function(){
            disabled: true,
            text: 'Delete User',
            handler : function () {
-             grid.stopEditing();
-             var s = grid.getSelectionModel().getSelections();
+             user_grid.stopEditing();
+             var s = user_grid.getSelectionModel().getSelections();
              for(var i = 0, r; r = s[i]; i++){
                Ext.Ajax.request({
                  url: '/user/' + r.get('Username'),
@@ -113,8 +113,8 @@ Ext.onReady(function(){
         ]
     });
 
-    grid.getSelectionModel().on('selectionchange', function(sm){
-        grid.removeBtn.setDisabled(sm.getCount() < 1);
+    user_grid.getSelectionModel().on('selectionchange', function(sm){
+        user_grid.removeBtn.setDisabled(sm.getCount() < 1);
     });
 
     function applyUserChanges() {
@@ -148,10 +148,10 @@ Ext.onReady(function(){
       renderTo: 'user-grid',
       activeTab: 0,
       items: [
-        grid,
+        user_grid,
         { 'title' : 'Tasks', 'html' : 'Not done yet' }
       ],
     });
-    store.on('update', applyUserChanges, grid);
+    store.on('update', applyUserChanges, user_grid);
     store.load();
 });
