@@ -34,7 +34,7 @@ Ext.onReady(function(){
 
     var fm = Ext.form;
 
-    var editor = new Ext.ux.RowEditor({
+    var user_editor = new Ext.ux.RowEditor({
         saveText: 'Update'
     });
 
@@ -42,7 +42,7 @@ Ext.onReady(function(){
     var user_grid = new Ext.grid.GridPanel({
         store: user_store,
         title: 'Users',
-        plugins: [editor],
+        plugins: [user_editor],
         view: new Ext.grid.GroupingView({
             markDirty: false
         }),
@@ -81,11 +81,11 @@ Ext.onReady(function(){
                  Port: 5985,
                  Key: "",
                });
-               editor.stopEditing();
+               user_editor.stopEditing();
                user_store.insert(0, u);
                user_grid.getView().refresh();
                user_grid.getSelectionModel().selectRow(0);
-               editor.startEditing(0);
+               user_editor.startEditing(0);
             }
         },
         {
