@@ -18,7 +18,7 @@ Ext.onReady(function(){
     ]);
 
     // create the Data Store
-    var store = new Ext.data.GroupingStore({
+    var user_store = new Ext.data.GroupingStore({
 
         proxy: new Ext.data.HttpProxy({            
             method: 'GET',
@@ -40,7 +40,7 @@ Ext.onReady(function(){
 
     // create the user_grid
     var user_grid = new Ext.grid.GridPanel({
-        store: store,
+        store: user_store,
         title: 'Users',
         plugins: [editor],
         view: new Ext.grid.GroupingView({
@@ -82,7 +82,7 @@ Ext.onReady(function(){
                  Key: "",
                });
                editor.stopEditing();
-               store.insert(0, u);
+               user_store.insert(0, u);
                user_grid.getView().refresh();
                user_grid.getSelectionModel().selectRow(0);
                editor.startEditing(0);
@@ -101,7 +101,7 @@ Ext.onReady(function(){
                  url: '/user/' + r.get('Username'),
                  method : 'DELETE',
                  success: function(request, result) {
-                   store.reload ();
+                   user_store.reload ();
                  },
                  failure: function(request, result) {
                    Ext.Msg.alert('User', 'Deletion failed!');
@@ -152,6 +152,6 @@ Ext.onReady(function(){
         { 'title' : 'Tasks', 'html' : 'Not done yet' }
       ],
     });
-    store.on('update', applyUserChanges, user_grid);
-    store.load();
+    user_store.on('update', applyUserChanges, user_grid);
+    user_store.load();
 });
