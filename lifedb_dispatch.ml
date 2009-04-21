@@ -19,7 +19,7 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
     let url_list = List.filter ((<>) "") (Neturl.url_path url) in
     let url_hd = try List.hd url_list with _ -> "" in
     let url_path = Neturl.join_path (Neturl.url_path url) in
-    Log.logmod "URL" "%s %s" (match cgi#request_method with `HEAD -> "HEAD" |`GET -> "GET" |`POST -> "POST" |_ -> "other")  url_path;
+    Log.logmod "URL" "%s %s" (match cgi#request_method with `HEAD -> "HEAD" |`GET -> "GET" |`POST -> "POST" |`DELETE -> "DELETE" |_ -> "other")  url_path;
     match check_auth cgi with
     (* not authenticated *)
     |false -> begin
