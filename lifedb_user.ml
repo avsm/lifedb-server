@@ -39,6 +39,8 @@ let send_rpc (user:SS.User.t) json =
   |`Success res -> Log.logmod "RPC" "-> %s: success (res: %s)" user#uid res
   |`Failure res -> Log.logmod "RPC" "-> %s: epic fail (res: %s)" user#uid res
 
+let succ_sent_guids = Hashtbl.create 1 
+
 (* HTTP PUT some content to a remote user *)
 let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) =
   let uri = sprintf "http://%s:%Lu/sync/%s/_entry/%s" user#ip user#port (Lifedb_config.Dir.username ()) entry#uid in
@@ -95,6 +97,7 @@ let put_rpc syncdb (p:Http_client.pipeline) (user:SS.User.t) (entry:LS.Entry.t) 
       |`Failure res -> Log.logmod "Upload" "Failure to %s (%s): %s" user#uid entry#file_name res)
     (fun () -> close_in fin);
     user#set_sent_guids (add_guids_to_blob user#sent_guids [entry#uid]);
+    Hashtbl.replace succ_sent_guids (user#uid, entry#uid) (Unix.gettimeofday ());
     ignore(user#save);
   end
 
@@ -209,6 +212,13 @@ let upload_thread () =
 let sync_our_entries_to_user lifedb syncdb user =
   Log.logmod "Sync" "Our entries -> %s" user#uid;
   let uids = Lifedb_filter.apply_filters lifedb syncdb user in
+  (* filter out recently sent GUIDs from the memory hash *)
+  let uids = List.filter (fun e ->
+    try
+      let tm = Hashtbl.find succ_sent_guids (user#uid,e#uid) in
+      Unix.gettimeofday () -. tm > 86400.
+    with _ -> true
+  ) uids in
   List.iter (fun x -> Log.logmod "Sync" "added upload -> %s: %s" x#uid x#file_name) uids;
   List.iter (fun x -> Event.sync (Event.send uploadreq (user#uid, x#uid))) uids
 

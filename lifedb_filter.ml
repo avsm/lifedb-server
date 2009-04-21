@@ -22,7 +22,6 @@ let filter_recipients user es =
   Log.logmod "Filter" "Filtering entries addressed to -> %s (%d results)" user#uid (List.length f);
   f
 
-
 (* apply a single filter and return a set of entries *)
 let apply_filter lifedb syncdb (user:SS.User.t) (entries:LS.Entry.t list) (filter:SS.Filter_rule.t) =
   match filter#body with
