@@ -41,6 +41,7 @@ Ext.onReady(function(){
     // create the grid
     var grid = new Ext.grid.GridPanel({
         store: store,
+        title: 'Users',
         plugins: [editor],
         view: new Ext.grid.GroupingView({
             markDirty: false
@@ -67,7 +68,6 @@ Ext.onReady(function(){
             },
             {header: "Key", dataIndex: 'Key', sortable: false},
         ],
-        renderTo:'user-grid',
         clicksToEdit:1,
         width:540,
         height:200,
@@ -144,6 +144,14 @@ Ext.onReady(function(){
       this.getStore().reload();
     }
 
+    var tabs = new Ext.TabPanel({
+      renderTo: 'user-grid',
+      activeTab: 0,
+      items: [
+        grid,
+        { 'title' : 'Tasks', 'html' : 'Not done yet' }
+      ],
+    });
     store.on('update', applyUserChanges, grid);
     store.load();
 });

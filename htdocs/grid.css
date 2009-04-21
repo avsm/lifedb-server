@@ -56,6 +56,6 @@
     background-image: url(details.gif);
 }
 .x-resizable-pinned .x-resizable-handle-south{
-    background:url(../../resources/images/default/sizer/s-handle-dark.gif);
+    background:url(resources/images/default/sizer/s-handle-dark.gif);
     background-position: top;
 }
