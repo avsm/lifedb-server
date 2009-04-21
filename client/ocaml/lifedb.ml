@@ -80,11 +80,20 @@ module Rpc = struct
       username: string
     >
     and in_r = <
-      info: in_t;
-      duration: float;  (* time the task has been running, float seconds *)
-      ?pid: int option
+      name: string;
+      plugin: string;
+      mode: string;
+      silo: string;
+      ?period: int option;
+      ?secret: passwd option;
+      ?args: (string, string) Hashtbl.t option;
+      ?pid: int option;
+      duration: float  (* time the task has been running, float seconds *)
     >
-    and in_rs = (string,in_r) Hashtbl.t
+    and in_rs = <
+      results: int;
+      rows: in_r list
+    >
     and out_t = <
       plugin : string;
       pltype : string;
@@ -92,11 +101,18 @@ module Rpc = struct
       ?args: (string, string) Hashtbl.t option
     >
     and out_r = <
-      info: out_t;
-      duration: float;
-      ?pid: int option
+      name: string;
+      plugin: string;
+      pltype: string;
+      ?secret: passwd option;
+      ?args: (string, string) Hashtbl.t option;
+      ?pid: int option;
+      duration: float
     > 
-    and out_rs = (string,out_r) Hashtbl.t
+    and out_rs = <
+      results: int;
+      rows: out_r list
+    >
   end
 
   module Entry = struct

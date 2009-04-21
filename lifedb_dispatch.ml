@@ -49,20 +49,37 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |`POST, "mirror" ->
                let arg = mark_post_rpc cgi in
                Sql_mirror.dispatch cgi arg
-            |`POST, "task" ->
+
+            |`POST, "intask" ->
                let arg = mark_post_rpc cgi in
-               let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
                Lifedb_tasks.dispatch cgi (`Create (name,arg))
-            |`DELETE, "task" ->
+            |`DELETE, "intask" ->
                mark_delete_rpc cgi;
-               let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
+               let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
                Lifedb_tasks.dispatch cgi (`Destroy name)
-            |`GET, "task" ->
+            |`GET, "intask" ->
                let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
                mark_get_rpc cgi;
                Lifedb_tasks.dispatch cgi (match tasksel with
                |"_all" -> `List
                |name -> `Get name)
+
+            |`POST, "outtask" ->
+               let arg = mark_post_rpc cgi in
+               let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
+               Lifedb_out_tasks.dispatch cgi (`Create (name,arg))
+            |`DELETE, "outtask" ->
+               mark_delete_rpc cgi;
+               let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
+               Lifedb_out_tasks.dispatch cgi (`Destroy name)
+            |`GET, "outtask" ->
+               let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
+               mark_get_rpc cgi;
+               Lifedb_out_tasks.dispatch cgi (match tasksel with
+               |"_all" -> `List
+               |name -> `Get name)
+        
             |`GET, "plugin" ->
                let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
                mark_get_rpc cgi;

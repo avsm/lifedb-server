@@ -34,14 +34,12 @@ let task_throttle () = Thread.delay 0.1
 let json_of_task name t : Lifedb.Rpc.Task.out_r =
    let secret = match t.secret with |None -> None
       |Some (s,u) -> Some (object method service=s method username=u end) in
-   let info : Lifedb.Rpc.Task.out_t = object
+   object
+       method name=name
        method plugin=t.plugin
        method pltype=t.mtype
        method secret=secret 
        method args=t.args
-   end in
-   object
-       method info=info
        method duration=Unix.gettimeofday () -. t.start_time
        method pid=Fork_helper.pid_of_task t.running
    end
@@ -263,9 +261,9 @@ let dispatch cgi = function
        )
    |`List ->
        with_lock m (fun () ->
-           let resp = Hashtbl.create 1 in
-           Hashtbl.iter (fun name state -> Hashtbl.add resp name (json_of_task name state)) task_list;
-           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Task.json_of_out_rs resp))
+           let r = Hashtbl.fold (fun name state a -> json_of_task name state :: a) task_list [] in
+           let res = object method results=List.length r  method rows=r end in
+           cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Task.json_of_out_rs res))
        )
    |`Destroy name ->
        with_lock m (fun () ->
