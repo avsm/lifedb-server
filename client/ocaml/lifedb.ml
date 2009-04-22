@@ -38,8 +38,10 @@ module Rpc = struct
       name: string;
       body: string;
       zorder: int
+    > and filters = <
+      results: int;
+      rows: filter list
     >
-
   end
 
   module Plugin = struct
@@ -73,7 +75,7 @@ module Rpc = struct
       silo: string;
       ?period: int option;
       ?secret: passwd option;
-      ?args: (string, string) Hashtbl.t option
+      ?args: string list option
      >
     and passwd = <
       service: string;
@@ -86,7 +88,7 @@ module Rpc = struct
       silo: string;
       ?period: int option;
       ?secret: passwd option;
-      ?args: (string, string) Hashtbl.t option;
+      ?args: string list option;
       ?pid: int option;
       duration: float  (* time the task has been running, float seconds *)
     >
@@ -98,14 +100,14 @@ module Rpc = struct
       plugin : string;
       pltype : string;
       ?secret : passwd option;
-      ?args: (string, string) Hashtbl.t option
+      ?args: string list option
     >
     and out_r = <
       name: string;
       plugin: string;
       pltype: string;
       ?secret: passwd option;
-      ?args: (string, string) Hashtbl.t option;
+      ?args: string list option;
       ?pid: int option;
       duration: float
     > 

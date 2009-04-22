@@ -18,7 +18,7 @@ type task_state = {
    cwd: string;
    start_time: float; 
    secret: (string * string) option;
-   args : (string, string) Hashtbl.t option;
+   args : string list option;
    mutable outfd: Unix.file_descr option;
    mutable errfd: Unix.file_descr option;
    mutable running: Fork_helper.task;
@@ -148,10 +148,7 @@ let start_task name =
     |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for task '%s'" name; [||]
   end in
   (* add environment arguments *)
-  let args = match t.args with
-  |None -> [||]
-  |Some argh -> Array.of_list (Hashtbl.fold (fun k v a -> sprintf "%s=%s" k v :: a) argh [])
-  in
+  let args = match t.args with None -> [||] | Some a -> Array.of_list a in
   let env = Array.append env args in
   let logdir = Lifedb_config.Dir.log() in
   let logfile = sprintf "%s/%s.log" logdir name in
