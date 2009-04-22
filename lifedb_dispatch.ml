@@ -109,6 +109,7 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |(`GET|`HEAD), "pltype" ->
                mark_get_rpc cgi;
                Lifedb_query.dispatch db env cgi (`Mtype (List.tl url_list))
+
             |`POST, "user" ->
                let arg = mark_post_rpc cgi in
                Lifedb_user.dispatch syncdb env cgi (`Create arg)
@@ -122,6 +123,7 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
                Lifedb_user.dispatch syncdb env cgi (match usersel with 
                |"_all" -> `List
                |name -> `Get name)
+
             |`POST, "filter" ->
                let arg = mark_post_rpc cgi in
                let uid = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
@@ -129,6 +131,14 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |`DELETE, "filter" ->
                let uid,name = match url_list with |[_;uid;name] -> uid,name |_ -> "","" in
                Lifedb_user.dispatch syncdb env cgi (`Delete_filter (uid,name))
+            |`GET, "filter" -> begin
+               mark_get_rpc cgi;
+               match url_list with
+               |["filter";useruid] -> Lifedb_user.dispatch syncdb env cgi (`List_filters useruid)
+               |["filter";useruid;fname] -> Lifedb_user.dispatch syncdb env cgi (`Get_filter (useruid, fname))
+               |_ -> raise (Resource_not_found "filter")
+            end
+
             |_ -> raise (Invalid_rpc "Unknown request")
     end
 

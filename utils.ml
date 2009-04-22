@@ -72,3 +72,9 @@ let list_max_size sz l =
   |hd::tl ->
     List.rev (hd::a)
   in fn [] l
+
+let results_of_search l =
+  object
+    method results = List.length l
+    method rows = l
+  end

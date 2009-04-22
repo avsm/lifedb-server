@@ -193,6 +193,22 @@ end
   let tr = object method results=List.length r method rows=r end in
   cgi#output#output_string (Json_io.string_of_json (Rpc.User.json_of_ts tr))
 end
+|`List_filters useruid -> begin
+  find_user db useruid (fun user ->
+    let r = List.map (fun f -> object method name=f#name method body=f#body method zorder=(Int64.to_int f#zorder) end) user#filters in
+    cgi#output#output_string (Json_io.string_of_json (Rpc.User.json_of_filters (results_of_search r)));
+  )
+end
+|`Get_filter (useruid, filtername) -> begin
+  find_user db useruid (fun user ->
+    match List.filter (fun f -> f#name = filtername) user#filters with
+    |[] -> raise (Lifedb_rpc.Resource_not_found ("unknown filter " ^ filtername))
+    |[f] ->
+      let r = object method name=f#name method body=f#body method zorder=(Int64.to_int f#zorder) end in
+      cgi#output#output_string (Json_io.string_of_json (Rpc.User.json_of_filter r))
+    |_ -> raise (Lifedb_rpc.Invalid_rpc "internal error: multiple filters with same name found")
+  )
+end
 
 (* upload channel, send it a username/file to upload sequentially *)
 let uploadreq = Event.new_channel ()
