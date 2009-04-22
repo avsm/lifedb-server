@@ -72,6 +72,7 @@ macdist: all
 	mkdir -p macdist/bin
 	mkdir -p macdist/lib
 	mkdir -p macdist/etc
+	cp -r ./htdocs macdist/
 	cp ./$(RESULT) macdist/bin/
 	for i in $(WANTLIB); do cp /opt/local/lib/$$i.dylib macdist/lib/$$i.dylib; done
 	cp ./config.json.in macdist/etc/lifedb.config.in
