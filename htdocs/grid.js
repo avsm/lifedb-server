@@ -12,6 +12,8 @@ Ext.onReady(function(){
 
     var fm = Ext.form;
 
+    // ------ FILTER GRID ----
+
     var Filter = Ext.data.Record.create([
       {name: 'Name', mapping: 'name'},
       {name: 'Rule', mapping: 'body'},
@@ -35,11 +37,6 @@ Ext.onReady(function(){
       saveText: "Update"
     });
 
-    var rules = new Ext.data.ArrayStore({
-      fields: ['rule'],
-      data: [ ['add *'], ['add * where #remote in recipients'] ]
-    });
- 
     var filter_grid = new Ext.grid.GridPanel({
       store: filter_store,
       collapsible: true,
@@ -141,6 +138,8 @@ Ext.onReady(function(){
     filter_grid.getSelectionModel().on('selectionchange', function(sm){
         filter_grid.removeBtn.setDisabled(sm.getCount() < 1);
     });
+
+    // --------- USER GRID ------------
 
     var User = Ext.data.Record.create([
       {name: 'Username', mapping: 'uid'},
@@ -297,7 +296,7 @@ Ext.onReady(function(){
       items: [ user_grid, filter_grid ],
     });
 
-    // IN TASK 
+    // ---------------- IN TASK 
 
     var InTask = Ext.data.Record.create([
       {name: 'Name', mapping: 'name'},
