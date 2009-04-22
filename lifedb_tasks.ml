@@ -89,7 +89,7 @@ let run_command name cmd cwd secret args silo =
     let openfdfn f = Unix.handle_unix_error (Unix.openfile f [ Unix.O_APPEND; Unix.O_CREAT; Unix.O_WRONLY]) 0o600 in
     let outfd = openfdfn logfile in
     let errfd = openfdfn errlogfile in
-    let logfn fd s = ignore(Unix.write fd s 0 (String.length s)) in
+    let logfn fd s = try ignore(Unix.write fd s 0 (String.length s)) with _ -> () in
     let tmstr = current_datetime () in
     logfn outfd (sprintf "[%s] Stdout log started\n" tmstr);
     logfn errfd (sprintf "[%s] Stderr log started\n" tmstr);
@@ -213,6 +213,7 @@ let task_sweep () =
 
 let dispatch cgi = function
    |`Create (name,p) ->
+       Log.logmod "DebugTask" "name=%s arg=%s" name p;
        let params = Lifedb.Rpc.Task.in_t_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
            match find_task name with
