@@ -10,6 +10,8 @@ Ext.BLANK_IMAGE_URL = 'resources/images/default/s.gif';
 
 Ext.onReady(function(){
 
+    var fm = Ext.form;
+
     var Filter = Ext.data.Record.create([
       {name: 'Name', mapping: 'name'},
       {name: 'Rule', mapping: 'body'},
@@ -18,15 +20,126 @@ Ext.onReady(function(){
 
     var filter_proxy = new Ext.data.HttpProxy({
       method: 'GET',
-      url : '/user'
+      url : '/filter/_unknown'
     });
 
-    var filter_store = new Ext.data.Store({
+    var filter_store = new Ext.data.GroupingStore({
       proxy: filter_proxy,
       reader: new Ext.data.JsonReader({
         totalProperty: 'results',
         root: 'rows',
-      }) 
+      }, Filter) 
+    });
+
+    var filter_editor = new Ext.ux.RowEditor({
+      saveText: "Update"
+    });
+
+    var rules = new Ext.data.ArrayStore({
+      fields: ['rule'],
+      data: [ ['add *'], ['add * where #remote in recipients'] ]
+    });
+ 
+    var filter_grid = new Ext.grid.GridPanel({
+      store: filter_store,
+      collapsible: true,
+      title: 'Filters',
+      plugins: [filter_editor],
+      clicksToEdit: 1,
+      width: 700,
+      height: 150,
+      view: new Ext.grid.GroupingView({ markDirty: false }),
+      columns: [
+        {header: "Name", dataIndex:"Name", sortable: true,
+          editor: new fm.TextField({ allowBlank: false})},
+        {header: 'Rule', dataIndex:'Rule', sortable: true, width: 200,
+          editor: { xtype:'combo', triggerAction:'all', forceSelection: true,
+            store:['add *', 'add * where #remote in recipients'], typeAhead:true,
+            mode:'local', selectOnFocus:true, emptyText: 'Select rule...'}},
+        {header: "Order", dataIndex:"Order", sortable: true,
+          editor: {
+            allowBlank: false,
+            xtype: 'numberfield',
+            minValue: 1,
+            maxValue: 200,
+          }
+        }
+      ],
+      tbar: [{
+          iconCls: 'icon-feed-add',
+          ref : '../addBtn',
+          text: 'Add Rule',
+          disabled: true,
+          handler : function(){
+            var u = new Filter({
+              Name: '',
+              Body: '',
+              Order: 1,
+            });
+            filter_editor.stopEditing();
+            filter_store.insert(0, u);
+            filter_grid.getView().refresh();
+            filter_grid.getSelectionModel().selectRow(0);
+            filter_editor.startEditing(0);
+          }
+        },
+        {
+          ref : '../removeBtn',
+          iconCls: 'icon-feed-delete',
+          disabled: true,
+          text: 'Delete Rule',
+          handler : function () {
+             filter_grid.stopEditing();
+             var u = filter_store.current_user;
+             var s = filter_grid.getSelectionModel().getSelections();
+             for(var i = 0, r; r = s[i]; i++) {
+               Ext.Ajax.request({
+                 url: '/filter/' + u + "/" + r.get('Name'),
+                 method : 'DELETE',
+                 success: function(request, result) {
+                   filter_store.reload ();
+                 },
+                 failure: function(request, result) {
+                   Ext.Msg.alert('Filter', 'Deletion failed!');
+                 },
+               });
+             }
+           }
+        }
+        ]
+
+    });
+
+    function applyFilterChanges() {
+      console.log('applyFilterChanges');
+      mr = this.getStore().getModifiedRecords();
+      for (var i = 0; i < mr.length; i++) {
+        var r = mr[i];
+        var j = {
+          name: r.get('Name'),
+          body: r.get('Rule'),
+          zorder: r.get('Order'),
+        };
+        Ext.Ajax.request( {
+          waitMsg: "saving filter...",
+          url: '/filter/' + filter_store.current_user,
+          method: 'POST',
+          jsonData:  j,
+          success: function (request, result) {
+            r.commit();
+          },
+          failure: function (request, result) {
+            Ext.Msg.alert('Filter', 'Failed to edit filter: ' + result.responseText);
+          },
+        });
+      }
+      this.getStore().reload();
+    }
+
+    filter_store.on('update', applyFilterChanges, filter_grid);
+
+    filter_grid.getSelectionModel().on('selectionchange', function(sm){
+        filter_grid.removeBtn.setDisabled(sm.getCount() < 1);
     });
 
     var User = Ext.data.Record.create([
@@ -36,10 +149,6 @@ Ext.onReady(function(){
       {name: 'Key', mapping: 'key'},
     ]);
 
-    console.log(filter_proxy.url);
-    filter_proxy.url = "/user/xxx";
-    console.log(filter_proxy.url);
-  
     // create the Data Store
     var user_store = new Ext.data.GroupingStore({
 
@@ -54,8 +163,6 @@ Ext.onReady(function(){
             root: 'rows',
         }, User)
     });
-
-    var fm = Ext.form;
 
     var user_editor = new Ext.ux.RowEditor({
         saveText: 'Update'
@@ -92,8 +199,8 @@ Ext.onReady(function(){
             {header: "Key", dataIndex: 'Key', sortable: false},
         ],
         clicksToEdit:1,
-        width:540,
-        height:200,
+        width:700,
+        height: 200,
         tbar: [{
             iconCls: 'icon-user-add',
             text: 'Add User',
@@ -138,6 +245,7 @@ Ext.onReady(function(){
 
     user_grid.getSelectionModel().on('selectionchange', function(sm){
         user_grid.removeBtn.setDisabled(sm.getCount() < 1);
+        filter_grid.addBtn.setDisabled(sm.getCount() < 1);
     });
 
     function applyUserChanges() {
@@ -167,6 +275,27 @@ Ext.onReady(function(){
       this.getStore().reload();
     }
 
+    user_store.on('update', applyUserChanges, user_grid);
+
+    user_grid.getSelectionModel().on('rowselect', function(sm, rowIdx, r) {
+      filter_store.proxy = new Ext.data.HttpProxy({
+        method: 'GET',
+        url : '/filter/' + r.get('Username')
+      });
+      filter_grid.collapse ();
+      filter_store.removeAll();
+      filter_grid.setTitle("Filters for " + r.get('Username'));
+      filter_store.current_user = r.get('Username');
+      filter_store.reload ();
+      filter_grid.expand ();
+      console.log(r);
+    });
+
+    user_panel = new Ext.Panel({
+      title: 'User Administration',
+      collapsible:true,
+      items: [ user_grid, filter_grid ],
+    });
 
     // IN TASK 
 
@@ -233,21 +362,21 @@ Ext.onReady(function(){
             }
           ],
           clicksToEdit:1,
-          width:540,
-          height:200,
+          width:700,
+          height:150,
         });
 
     var tabs = new Ext.TabPanel({
       renderTo: 'user-grid',
+      width: 700,
       activeTab: 0,
       items: [
-        user_grid,
+        user_panel,
         in_task_grid, 
       ],
     });
-    user_store.on('update', applyUserChanges, user_grid);
     user_store.load();
-    
     in_task_store.load ();
+    filter_grid.collapse();
     
 });
