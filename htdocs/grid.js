@@ -10,6 +10,25 @@ Ext.BLANK_IMAGE_URL = 'resources/images/default/s.gif';
 
 Ext.onReady(function(){
 
+    var Filter = Ext.data.Record.create([
+      {name: 'Name', mapping: 'name'},
+      {name: 'Rule', mapping: 'body'},
+      {name: 'Order', mapping: 'zorder'},
+    ]);
+
+    var filter_proxy = new Ext.data.HttpProxy({
+      method: 'GET',
+      url : '/user'
+    });
+
+    var filter_store = new Ext.data.Store({
+      proxy: filter_proxy,
+      reader: new Ext.data.JsonReader({
+        totalProperty: 'results',
+        root: 'rows',
+      }) 
+    });
+
     var User = Ext.data.Record.create([
       {name: 'Username', mapping: 'uid'},
       {name: 'Hostname', mapping: 'ip'},
@@ -17,6 +36,10 @@ Ext.onReady(function(){
       {name: 'Key', mapping: 'key'},
     ]);
 
+    console.log(filter_proxy.url);
+    filter_proxy.url = "/user/xxx";
+    console.log(filter_proxy.url);
+  
     // create the Data Store
     var user_store = new Ext.data.GroupingStore({
 
@@ -144,14 +167,87 @@ Ext.onReady(function(){
       this.getStore().reload();
     }
 
+
+    // IN TASK 
+
+    var InTask = Ext.data.Record.create([
+      {name: 'Name', mapping: 'name'},
+      {name: 'Plugin', mapping: 'plugin'},
+      {name: 'Mode', mapping: 'mode'},
+      {name: 'Silo', mapping: 'silo'},
+      {name: 'Period', mapping: 'period'},
+      {name: 'Args', mapping: 'args'},
+      {name: 'Pid', mapping: 'pid'},
+    ]);
+
+    // create the Data Store
+    var in_task_store = new Ext.data.GroupingStore({
+
+        proxy: new Ext.data.HttpProxy({
+            method: 'GET',
+            url:'/intask'
+        }),
+
+        // the return will be XML, so lets set up a reader
+        reader: new Ext.data.JsonReader({
+            totalProperty: 'results',
+            root: 'rows',
+        }, InTask)
+    });
+
+    var in_task_editor = new Ext.ux.RowEditor({
+        saveText: 'Update'
+    });
+
+    // create the in_task_grid
+    var in_task_grid = new Ext.grid.GridPanel({
+        store: in_task_store,
+        title: 'Tasks',
+        plugins: [in_task_editor],
+        view: new Ext.grid.GroupingView({
+            markDirty: false
+        }),
+
+        columns: [
+            {header: "Name", dataIndex: 'Name', sortable: true,
+              editor: new fm.TextField({
+                 allowBlank: false,
+              })
+            },
+            {header: "Plugin", dataIndex: 'Plugin', sortable: true,
+              editor: new fm.TextField({
+                 allowBlank: false
+              })
+            },
+            {header: "Mode", dataIndex: 'Mode', sortable: false,
+              editor : { xtype: 'textfield', allowBlank: false }
+            },
+            {header: 'Silo', dataIndex: 'Silo', sortable: false,
+              editor : { xtype: 'textfield', allowBlank: false }
+            },
+            {header: 'Period', dataIndex: 'Period', sortable: false,
+              editor : { xtype: 'numberfield', minValue: 0 }
+            },
+            {header: 'Args', dataIndex: 'Args', sortable: false,
+              editor : { xtype : 'combo' }
+            }
+          ],
+          clicksToEdit:1,
+          width:540,
+          height:200,
+        });
+
     var tabs = new Ext.TabPanel({
       renderTo: 'user-grid',
       activeTab: 0,
       items: [
         user_grid,
-        { 'title' : 'Tasks', 'html' : 'Not done yet' }
+        in_task_grid, 
       ],
     });
     user_store.on('update', applyUserChanges, user_grid);
     user_store.load();
+    
+    in_task_store.load ();
+    
 });
