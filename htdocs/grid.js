@@ -12,6 +12,26 @@ Ext.onReady(function(){
 
     var fm = Ext.form;
 
+    // ------ PLUGINS STORE ----
+    var Plugin = Ext.data.Record.create([
+      {name: 'Name', mapping: 'name'},
+      {name: 'Command', mapping: 'cmd'},
+      {name: 'Description', mapping: 'description'},
+    ])
+
+    var plugin_proxy = new Ext.data.HttpProxy({
+      method: 'GET',
+      url: '/plugin',
+    });
+
+    var plugin_store = new Ext.data.GroupingStore({
+      proxy: plugin_proxy,
+      reader: new Ext.data.JsonReader({
+        totalProperty: 'results',
+        root: 'rows',
+      }, Plugin)
+    });
+
     // ------ FILTER GRID ----
 
     var Filter = Ext.data.Record.create([
@@ -166,7 +186,6 @@ Ext.onReady(function(){
     var user_editor = new Ext.ux.RowEditor({
         saveText: 'Update'
     });
-
     // create the user_grid
     var user_grid = new Ext.grid.GridPanel({
         store: user_store,
@@ -210,6 +229,7 @@ Ext.onReady(function(){
                  Port: 5985,
                  Key: "",
                });
+
                user_editor.stopEditing();
                user_store.insert(0, u);
                user_grid.getView().refresh();
@@ -281,13 +301,11 @@ Ext.onReady(function(){
         method: 'GET',
         url : '/filter/' + r.get('Username')
       });
-      filter_grid.collapse ();
       filter_store.removeAll();
       filter_grid.setTitle("Filters for " + r.get('Username'));
       filter_store.current_user = r.get('Username');
       filter_store.reload ();
       filter_grid.expand ();
-      console.log(r);
     });
 
     user_panel = new Ext.Panel({
@@ -329,8 +347,9 @@ Ext.onReady(function(){
 
     // create the in_task_grid
     var in_task_grid = new Ext.grid.GridPanel({
+
         store: in_task_store,
-        title: 'Tasks',
+        title: 'Inbound',
         plugins: [in_task_editor],
         view: new Ext.grid.GroupingView({
             markDirty: false
@@ -343,12 +362,13 @@ Ext.onReady(function(){
               })
             },
             {header: "Plugin", dataIndex: 'Plugin', sortable: true,
-              editor: new fm.TextField({
-                 allowBlank: false
-              })
+              editor: { xtype:'combo', triggerAction: 'all', store: plugin_store, displayField: 'Name',
+                forceSelection: true, typeAhead: true },
             },
             {header: "Mode", dataIndex: 'Mode', sortable: false,
-              editor : { xtype: 'textfield', allowBlank: false }
+               editor: { xtype:'combo', triggerAction:'all', forceSelection: true,
+               store: ['single','periodic','constant'], typeAhead:true,
+               mode:'local', selectOnFocus:true, emptyText: 'Select mode...'}
             },
             {header: 'Silo', dataIndex: 'Silo', sortable: false,
               editor : { xtype: 'textfield', allowBlank: false }
@@ -357,13 +377,129 @@ Ext.onReady(function(){
               editor : { xtype: 'numberfield', minValue: 0 }
             },
             {header: 'Args', dataIndex: 'Args', sortable: false,
-              editor : { xtype : 'combo' }
+              editor : { xtype : 'textfield' }
             }
           ],
-          clicksToEdit:1,
-          width:700,
-          height:150,
+        clicksToEdit:1,
+        width:700,
+        height:150,
+
+        tbar: [{
+          iconCls: 'icon-task-add',
+          ref : '../addBtn',
+          text: 'Add Inbound Task',
+          handler : function() {
+            var u = new InTask({
+              Name: '',
+              Plugin: '',
+              Mode: 'single',
+              Silo: '',
+              Period: 0,
+              Args: '',
+              Pid: -1,
+            });
+            in_task_editor.stopEditing();
+            in_task_store.insert(0, u);
+            in_task_grid.getView().refresh();
+            in_task_grid.getSelectionModel().selectRow(0);
+            in_task_editor.startEditing(0);
+          }
+        },
+        {
+          ref : '../removeBtn',
+          iconCls: 'icon-task-delete',
+          disabled: true,
+          text: 'Delete Inbound Task',
+          handler : function () {
+             in_task_editor.stopEditing();
+             var s = in_task_grid.getSelectionModel().getSelections();
+             for(var i = 0, r; r = s[i]; i++) {
+               Ext.Ajax.request({
+                 url: '/intask/' + r.get('Name'),
+                 method : 'DELETE',
+                 success: function(request, result) {
+                   in_task_store.reload ();
+                 },
+                 failure: function(request, result) {
+                   Ext.Msg.alert('Filter', 'Deletion failed!');
+                 },
+               });
+             }
+           }
+          }]
+
         });
+
+    function applyInTaskChanges() {
+      console.log('applyInTaskChanges');
+      mr = this.getStore().getModifiedRecords();
+      for (var i = 0; i < mr.length; i++) {
+        var r = mr[i];
+        var j = {
+          plugin: r.get('Plugin'),
+          mode: r.get('Mode'),
+          period: r.get('Period'),
+          silo: r.get('Silo'),
+          args: [], /* XXX TODO */
+        };
+        Ext.Ajax.request( {
+          waitMsg: "saving inbound task...",
+          url: '/intask/' + r.get('Name'),
+          method: 'POST',
+          jsonData:  j,
+          success: function (request, result) {
+            r.commit();
+          },
+          failure: function (request, result) {
+            Ext.Msg.alert('Inbound Task', 'Failed to edit task: ' + result.responseText);
+          },
+        });
+      }
+      this.getStore().reload();
+    }
+
+    in_task_store.on('update', applyInTaskChanges, in_task_grid);
+
+    in_task_grid.getSelectionModel().on('selectionchange', function(sm){
+        in_task_grid.removeBtn.setDisabled(sm.getCount() < 1);
+    });
+
+    // -- OUTBOUND tasks panel
+    var OutTask = Ext.data.Record.create([
+      {name: 'Name', mapping: 'name'},
+      {name: 'Plugin', mapping: 'plugin'},
+      {name: 'Handles', mapping: 'pltype'},
+      {name: 'Args', mapping: 'args'},
+      {name: 'Pid', mapping: 'pid'},
+      {name: 'Duration', mapping: 'duration'},
+    ]);
+
+    // create the Data Store
+    var out_task_store = new Ext.data.GroupingStore({
+
+        proxy: new Ext.data.HttpProxy({
+            method: 'GET',
+            url:'/outtask'
+        }),
+
+        // the return will be XML, so lets set up a reader
+        reader: new Ext.data.JsonReader({
+            totalProperty: 'results',
+            root: 'rows',
+        }, OutTask)
+    });
+
+    var out_task_editor = new Ext.ux.RowEditor({
+        saveText: 'Update'
+    });
+
+    
+    tasks_panel = new Ext.Panel({
+      title: 'Tasks',
+      collapsible:true,
+      items: [ in_task_grid ],
+    });
+
 
     var tabs = new Ext.TabPanel({
       renderTo: 'user-grid',
@@ -371,11 +507,11 @@ Ext.onReady(function(){
       activeTab: 0,
       items: [
         user_panel,
-        in_task_grid, 
+        tasks_panel, 
       ],
     });
-    user_store.load();
+    user_store.load ();
     in_task_store.load ();
     filter_grid.collapse();
-    
+    plugin_store.load ();   
 });
