@@ -41,24 +41,28 @@ let push ?(copt=(None:Condition.t option)) (req:scan_request) =
     )
 
 let tm = Mutex.create ()
-let tb = ref false
+let tb = ref 0
+let tc = Condition.create ()
 
+(* The calling thread will block until its ok to unthrottle, signalled
+   by a signal on the tc Condition *)
 let throttle_check () =
-    let sl = with_lock tm (fun () ->
-      if !tb then (tb := false; true) else false
-    ) in
-    if sl then (
-      Log.logmod "Throttle" "sleeping...";
-      Thread.delay 60.;
+    with_lock tm (fun () ->
+        if !tb > 0 then begin
+          Log.logmod "Throttle" "throttle_check: blocking";
+          Condition.wait tc tm;
+          Log.logmod "Throttle" "throttle_check: woke up";
+        end
     )
 
-let throttle_request () =
-   with_lock tm (fun () ->
-      tb := true
+let throttle_request src fn =
+   Log.logmod "Throttle" "throttle_request: from %s" src;
+   with_lock tm (fun () -> incr tb);
+   try_final fn
+      (fun () ->
+      with_lock tm (fun () ->
+         decr tb;
+         if !tb = 0 then
+           Condition.signal tc;
+      )
    )
-
-let push_sync req =
-    let c' = Condition.create () in
-    let m' = Mutex.create () in
-    push ~copt:(Some c') req;
-    Condition.wait c' m'

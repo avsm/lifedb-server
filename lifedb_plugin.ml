@@ -67,5 +67,5 @@ let dispatch cgi = function
            cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_rs tr))
        )
    |`Scan ->
-       Db_thread_access.push_sync `Plugins
+       Db_thread_access.push `Plugins
 

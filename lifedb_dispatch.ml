@@ -147,7 +147,9 @@ let handler db lifedb syncdb env cgi =
   let cgi = Netcgi1_compat.Netcgi_types.of_compat_activation cgi in
   cgi#set_header~cache:`No_cache ~content_type:"text/html; charset=\"iso-8859-1\"" ();
   begin try
-    dispatch db lifedb syncdb env cgi;
+    Db_thread_access.throttle_request "dispatch" (fun () ->
+      dispatch db lifedb syncdb env cgi
+    )
   with
   |Resource_not_found reason ->
     return_error cgi `Not_found "Resource not found" reason

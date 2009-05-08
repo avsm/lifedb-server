@@ -166,7 +166,6 @@ end
     let cout = new Netchannels.output_channel (open_out fname) in
     let cin = arg#open_value_rd  () in
     with_in_and_out_obj_channel cin cout (fun cin cout -> cout#output_channel cin);
-    Db_thread_access.throttle_request ();
     Db_thread_access.push `Lifedb;
   )
 end
@@ -271,13 +270,15 @@ let sync_our_guids_to_user lifedb syncdb user =
 let sync_guids_to_remote_users_thread lifedb syncdb =
   let sync_interval = 60. in
   let now = Unix.gettimeofday () in
-  List.iter (fun user ->
-    if now -. user#last_sync > sync_interval then begin
-      sync_our_guids_to_user lifedb syncdb user;
-      user#set_last_sync (Unix.gettimeofday());
-      ignore(user#save);
-    end
-  ) (SS.User.get syncdb)
+  Db_thread_access.throttle_request "sync_guids_to_remote_users" (fun () ->
+    List.iter (fun user ->
+      if now -. user#last_sync > sync_interval then begin
+        sync_our_guids_to_user lifedb syncdb user;
+        user#set_last_sync (Unix.gettimeofday());
+        ignore(user#save);
+      end
+    ) (SS.User.get syncdb)
+  )
 
 (* thread to listen to received syncs from users and look for entries they
    need to add to the upload thread *)
@@ -289,13 +290,14 @@ let sync_entries_to_remote_users_thread lifedb syncdb =
     if Queue.is_empty sq then
       Condition.wait sc sm;
     let useruid = Queue.take sq in
-    find_user syncdb useruid (sync_our_entries_to_user lifedb syncdb)
+    Db_thread_access.throttle_request "sync_entries_to_remote" (fun () ->
+      find_user syncdb useruid (sync_our_entries_to_user lifedb syncdb)
+    )
   )
 
 (* received a sync request from another user, so update our has_guids list
  * for that user *)
 let dispatch_sync lifedb syncdb cgi uid arg =
-  Db_thread_access.throttle_request ();
   match SS.User.get ~uid:(Some uid) syncdb with
   |[] -> Lifedb_rpc.return_error cgi `Forbidden "Unknown user" ""
   |[user] -> 
@@ -317,7 +319,7 @@ let thread_with_dbs name fn =
   let syncdb = SS.Init.t (Lifedb_config.Dir.sync_db ()) in
   while true do
     (try
-      fn lifedb syncdb
+        fn lifedb syncdb
     with exn ->
       Log.logmod "Sync" "Got exception in thread '%s': %s" name (Printexc.to_string exn)
     );
