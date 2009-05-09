@@ -121,10 +121,9 @@ module Rpc = struct
 
     type json contact = <
        id: string;
-       first_name: string;
-       last_name: string;
-       abrecord: string option;
-       uid: string option
+       first_name: string option;
+       last_name: string option;
+       uid: string
     >
     and addr =
       (string * string) assoc

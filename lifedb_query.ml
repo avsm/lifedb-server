@@ -2,7 +2,19 @@ open Printf
 open Lifedb.Rpc
 open Utils
 
-let dispatch db env cgi = function
+module LS=Lifedb_schema
+module SS=Sync_schema
+
+let decl_of_db_mtype m =
+  object
+    method pltype=m#name
+    method description=m#label
+    method implements=m#implements
+    method icon=m#icon
+  end
+
+let dispatch lifedb syncdb env cgi = function
+(*
   |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
      match List.length bits with
@@ -55,85 +67,51 @@ let dispatch db env cgi = function
      |_ ->
         Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
    end
+*)
   |`Mtype bits -> begin
      match bits with
      |[] -> begin (* list of known mtypes *)
-        let stmt = db#stmt "allmtypesx" "select mtype,label,implements,icon from mtype_map" in
-        stmt#bind0;
-        let m = ref [] in
-        stmt#step_all (fun () ->
-          let mtype = stmt#str_col 0 in 
-          let label = stmt#str_col 1 in
-          let impl = stmt#str_col 2 in
-          let icon = match stmt#str_col 3 with "" -> None |x -> Some x in
-          let decl = object method pltype=mtype method description=label method implements=impl method icon=icon end in
-          m := decl :: !m;
-        );
-        Lifedb_rpc.return_json cgi (Plugin.json_of_decls !m)
+        let mtypes = LS.Mtype.get lifedb in
+        let decls = List.map decl_of_db_mtype mtypes in
+        Lifedb_rpc.return_json cgi (Plugin.json_of_decls decls)
      end
      |mtype :: tl -> begin (* info on mtype *)
-       let stmt = db#stmt "getmtype" "select label,implements,icon from mtype_map where mtype=?" in
-       stmt#bind1 (Sqlite3.Data.TEXT mtype);
-       match stmt#step_once with
-       |0 -> Lifedb_rpc.return_error cgi `Not_found "pltype not found" "unknown pltype"
-       |_ -> begin
-         let icon = match stmt#str_col 2 with "" -> None |x -> Some x in
+       match LS.Mtype.get_by_name mtype lifedb with
+       |[] -> Lifedb_rpc.return_error cgi `Not_found "pltype not found" "unknown pltype"
+       |[m] -> begin
          match tl with
          |[opt] when opt = "icon" -> begin
-           match icon with
+           match m#icon with
            |None -> Lifedb_rpc.return_error cgi `Not_found "No icon" "This plugin doesnt have an icon registered"
            |Some icon -> Lifedb_rpc.return_file cgi icon "image/png"
          end
          |_ ->
-           let label = stmt#str_col 0 in
-           let impl = stmt#str_col 1 in
-           let decl = object method pltype=mtype method description=label method implements=impl method icon=icon end in
-           Lifedb_rpc.return_json cgi (Plugin.json_of_decl decl)
+           Lifedb_rpc.return_json cgi (Plugin.json_of_decl (decl_of_db_mtype m))
        end
+       |_ -> raise (Lifedb_rpc.Resource_conflict "multiple pltypes")
      end
    end
   |`Doc id ->
-     let sql = "select filename from lifedb where id=?" in
-     let stmt = db#stmt "getdoc" sql in
-     stmt#bind1 (Sqlite3.Data.INT (Int64.of_string id));
-     match stmt#step_once with
-     |0 -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
-     |_ ->  begin
-       let fname = stmt#str_col 0 in
-       let json = Entry.t_of_json (Json_io.load_json ~big_int_mode:true fname) in
-       let contacts = match json#_from, json#_to with
-         |None, None -> []  |Some x, None -> [x]
-         |None, Some x -> x |Some x, Some y -> x :: y in
+     match LS.Entry.get ~id:(Some (Int64.of_string id)) lifedb with
+     |[] -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
+     |[e] ->  begin
+       let json = Entry.t_of_json (Json_io.load_json ~big_int_mode:true e#file_name) in
+       let services = e#from :: e#recipients in
        let chash = Hashtbl.create 1 in
-       let () = match contacts with 
-       |[] -> ()
-       |contacts ->
-           let sql = "select contacts.id, contacts.uid, contacts.abrecord, contacts.first_name, contacts.last_name from people left join contacts on (people.contact_id = contacts.id) where people.service_id=? and people.service_name=? and people.contact_id" in
-           let stmt = db#stmt "getid" sql in
-           List.iter (fun c ->
-              let svc = try (String.lowercase (List.assoc "type" c)) with Not_found -> failwith "must have type field in addr" in
-              let id = try (String.lowercase (List.assoc "id" c)) with Not_found -> failwith "must have id field in addr" in
-              stmt#bind2 (Sqlite3.Data.TEXT id) (Sqlite3.Data.TEXT svc);
-              match stmt#step_once with
-              |0 -> ()
-              |_ -> 
-                let strval pos = match stmt#str_col pos with "" -> None |x -> Some x in
-                let cid = stmt#str_col 0 in
-                let uid = strval 1 in
-                let abrecord = strval 2 in
-                let fname = stmt#str_col 3 in
-                let lname = stmt#str_col 4 in
-                let c = object
-                 method id = cid
-                 method uid = uid
-                 method abrecord = abrecord
-                 method first_name =  fname
-                 method last_name = lname
-                end in
-                let svch = try Hashtbl.find chash svc with Not_found -> let h=Hashtbl.create 1 in Hashtbl.add chash svc h; h in
-                Hashtbl.replace svch id c
-           ) contacts;
-       in
+           List.iter (fun s ->
+             match s#contact with 
+             |None -> ()
+             |Some c ->
+               let js = object
+                 method id = Int64.to_string (match c#id with |None -> -1L |Some x -> x)
+                 method uid = c#uid
+                 method first_name = c#first_name
+                 method last_name = c#last_name
+               end in
+               let svch = try Hashtbl.find chash s#name with Not_found -> let h=Hashtbl.create 1 in Hashtbl.add chash s#name h; h in
+               Hashtbl.replace svch s#uid js
+           ) services;
        let r = object method entry=json method contacts=chash end in
        Lifedb_rpc.return_json cgi (Entry.json_of_doc r)
      end
+     |_ -> raise (Lifedb_rpc.Resource_conflict "multiple ids")
