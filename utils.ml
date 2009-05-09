@@ -49,7 +49,7 @@ let make_dirs dir =
 
 let get_extension name =
   let rec search_dot i =
-    if i < 1 || name.[i] = '/' then invalid_arg "Filename.chop_extension"
+    if i < 1 || name.[i] = '/' then invalid_arg ("Filename.chop_extension: " ^ name)
     else if name.[i] = '.' then String.sub name (i+1) (String.length name - i - 1)
     else search_dot (i - 1) in
   search_dot (String.length name - 1)
