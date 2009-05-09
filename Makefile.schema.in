@@ -1,0 +1,16 @@
+OCAMLMAKEFILE = OCamlMakefile
+
+ANNOTATE = yes
+export ANNOTATE
+
+SOURCES=lifedb_schema_generator.ml
+RESULT=lifedb_schema_generator
+PACKS=unix sql_orm
+TRASH=lifedb_schema.ml lifedb_schema.mli sync_schema.ml sync_schema.mli
+
+.PHONY: all
+all: dnc
+	./$(RESULT)
+
+include $(OCAMLMAKEFILE)
+
