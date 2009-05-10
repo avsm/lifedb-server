@@ -19,15 +19,15 @@ let get_password username =
     let fh = open_in passwdfile in
     let map = ref [] in
     try_final (fun () ->
-    	repeat_until_eof (fun () ->
-	    let line = input_line fh in
-            match Str.split (Str.regexp_string " ") line with
-         | [username; password] ->
-             map := (username,password):: !map
-         |_ -> printf "error\n"
+      repeat_until_eof (fun () ->
+        let line = input_line fh in
+        match Str.split (Str.regexp_string " ") line with
+        |[username; password] ->
+          map := (username,password):: !map
+        |_ -> ()
       )
     ) (fun () -> close_in fh);
     try
-	Some (List.assoc username !map)
+    Some (List.assoc username !map)
     with _ -> None
 
