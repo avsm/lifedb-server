@@ -50,7 +50,7 @@ let lifedb = make [
   "entry" , [
     text ~flags:[`Unique; `Index] "uid";
     text "file_name";
-    date "created";
+    date ~flags:[`Index] "created";
     foreign "mtype" "mtype";
     foreign "service" "from";
     foreign_many "service" "recipients";
@@ -58,7 +58,13 @@ let lifedb = make [
     foreign_many "tag" "tags";
     text ~flags:[`Optional; `Index] "inbox";
     integer "delivered";
-  ], [ ["uid"],[]; [],["inbox";"delivered"]; [],["uid"] ; [],["file_name"]];
+  ], [
+    ["uid"],[];
+    ["created"],[];
+    [],["inbox";"delivered"];
+    [],["uid"];
+    [],["file_name"]
+  ];
 ]
 
 let sync = make [
@@ -87,6 +93,6 @@ let sync = make [
 ]  
 
 let _ = 
-    Sql_orm.generate ~debug:false lifedb "lifedb_schema";
+    Sql_orm.generate ~debug:true lifedb "lifedb_schema";
     Sql_orm.generate ~debug:false sync "sync_schema";
     ()

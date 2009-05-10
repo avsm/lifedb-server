@@ -14,7 +14,6 @@ let decl_of_db_mtype m =
   end
 
 let dispatch lifedb syncdb env cgi = function
-(*
   |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
      match List.length bits with
@@ -29,19 +28,9 @@ let dispatch lifedb syncdb env cgi = function
         let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
         let sqlfrom = sqldate datefrom in
         let sqlto = sqldate dateto in
-        let sql = sprintf
-           "SELECT lifedb.id FROM lifedb WHERE
-            ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?, 'unixepoch') 
-            ORDER BY ctime DESC" in
-        let stmt = db#stmt "getmsgs" sql in
-        stmt#bind2 sqlfrom sqlto;
-        let ids = ref [] in
-        stmt#step_all (fun () ->
-            let id = stmt#int_col 0 in
-            ids := (Int64.to_string id) :: !ids;
-        );
+        let ids = LS.Entry.get_uid ~custom_where:("entry.created >= ? AND entry.created < ?", [sqlfrom; sqlto]) lifedb in
         let d,_ = Unix.mktime datefrom in
-        let r = object method date=d method ids=(!ids) end in
+        let r = object method date=d method ids=ids end in
         Lifedb_rpc.return_json cgi (Query.json_of_day_list r)
      |2 -> (* query the number of docs per day in a month *)
         let month,year = try intn 1, intn 0 with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path") in
@@ -54,20 +43,17 @@ let dispatch lifedb syncdb env cgi = function
         let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
         let sqlfrom = sqldate datefrom in
         let sqlto = sqldate dateto in
-        let sql = "SELECT strftime('%d', ctime) FROM lifedb WHERE ctime >= datetime(?, 'unixepoch') AND ctime < datetime(?,'unixepoch')" in
-        let stmt = db#stmt "getdaycount" sql in
-        stmt#bind2 sqlfrom sqlto;
+        let created = LS.Entry.get_created ~custom_where:("entry.created >= ? AND entry.created < ?", [sqlfrom; sqlto]) lifedb in
         let freq = Array.create 31 0 in
-        stmt#step_all (fun () ->
-           let day = Int64.to_int (stmt#int_col 0) in
+        List.iter (fun c ->
+           let day = (Unix.gmtime c).Unix.tm_mday in
            freq.(day-1) <- freq.(day-1) + 1
-        );
+        ) created;
         let r = object method year=year method month=month method days=freq end in
         Lifedb_rpc.return_json cgi (Query.json_of_month_list r)
      |_ ->
         Lifedb_rpc.return_error cgi `Not_found "bad date" "unknown date format"
    end
-*)
   |`Mtype bits -> begin
      match bits with
      |[] -> begin (* list of known mtypes *)

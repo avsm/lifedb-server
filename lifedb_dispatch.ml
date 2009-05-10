@@ -100,11 +100,9 @@ let dispatch (db : Sql_access.db) (lifedb : Lifedb_schema.Init.t) (syncdb : Sync
             |(`GET|`HEAD), "passwd" ->
                mark_get_rpc cgi;
                Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
-(*
             |(`GET|`HEAD), "date" ->
                mark_get_rpc cgi;
-               Lifedb_query.dispatch lifedb env cgi (`Date (List.tl url_list))
-*)
+               Lifedb_query.dispatch lifedb syncdb env cgi (`Date (List.tl url_list))
             |(`GET|`HEAD), "doc" ->
                mark_get_rpc cgi;
                Lifedb_query.dispatch lifedb syncdb env cgi (`Doc (List.nth url_list 1))
