@@ -15,7 +15,6 @@
 Makefile
 /dist/
 /macdist/
-/configure
 /mac.tgz
 sqltop
 sqltop.top
