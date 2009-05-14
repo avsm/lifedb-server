@@ -1,8 +1,17 @@
+NOTE: these docs are not complete yet, so do please get in touch
+with me (anil@recoil.org) if you want to be an early adopter!
+
 Build
 -----
 
-To build this repository, you will need an up-to-date dports repo
-and the additional local repository available at:
+The build process is slightly complicated by needing a patched
+ocamlnet with some extra functions, and also some packages which
+dont seem to be included by distributions.
+
+MacOS X
+
+To build this repository on MacOS X, you will need an up-to-date
+dports repo and the additional local repository available at:
 http://github.com/avsm/darwinports/
 
 You will need at least:
@@ -17,11 +26,27 @@ You will need at least:
 
 Just do "./configure && make" in the current directory to build the sources.
 
+Linux
+
+On Debian Sid, you can clone:
+http://github.com/avsm/lifedb-depends
+
+and then run:
+
+# ./debian.sh
+# make all install
+
+...which will install the standard Debian packages and then some additional
+ones from the local repository with the relevant patches.
+
+Once the patches in the lifedb-depends repository are integrated upstream
+or worked around, the build process should become a lot simpler...
+
 Configuration
 -------------
 
 The server gets its base configuration from "config.json" in the build
-directory.
+directory, and there is a template in 'config.json.in' in the src tree.
 
  * lifedb_directory: Root of the user's LifeDB files
  * plugins_directory: List of directories to search for plugins
@@ -29,19 +54,23 @@ directory.
  * cache_directory: temporary space to hold cache files from plugins
  * config_directory: directory where passwords and task information is stored.
  * static_directory: static HTML files to serve up via /static
- * test_mode: if true, will not actually run commands but do everything else.
+
+The server accepts some command-line arguments:
+ * -conf: Location of the configuration file (default current dir)
+ * -test: if true, will not actually run external commands but do everything else.
 
 Password Management
 -------------------
 
 The server has a global passphrase (stored in the Keychain on MacOS X) which
 must be set before it will start.  This can be done with the ./set_passphrase.sh
-script in this repository.
+script in this repository.  On Linux and other platforms, there is an insecure
+flat file which contains a list of "username password" lines in plaintext.
 
 Once that is done, you can do  "make scripts && . ./export-var.sh" to build
 a development copy of the Python console scripts.  Run ./scripts/lifedb-passwd
 to add encrypted service/username/password entries for the various tasks.
-The service string should match the service/username definied in the task
+The service string should match the service/username defined in the task
 configuration file (see below).
 
 Plugins
