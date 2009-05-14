@@ -6,6 +6,19 @@ AC_INIT([lifedb-server], [0.1], [anil@recoil.org])
 AC_CONFIG_SRCDIR([custom_unix_stubs.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR(./m4)
+
+AC_CANONICAL_SYSTEM
+plat=generic
+case $target_os in
+darwin*)
+  plat=macos
+  ;;
+*)
+  ;;
+esac
+PLATFORM_ML=platform_$plat.ml
+AC_SUBST(PLATFORM_ML)
+
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_INSTALL

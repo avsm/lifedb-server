@@ -34,12 +34,13 @@ THREADS=yes
 RESULT=lifedb_server
 PACKS=netstring netcgi2 unix nethttpd-for-netcgi2 json-static json-wheel sqlite3 str ANSITerminal cryptokit netclient
 LIBDIRS=/opt/local/lib
+TRASH=platform.ml
 
 PP=./camlp4find $(PACKS)
 export PP
 
 .PHONY: all
-all: dnc
+all: platform.ml dnc
 	@ :
 
 .PHONY: run
@@ -84,7 +85,7 @@ macdist: all
 	rm -f mac.tgz
 	tar -zcvf mac.tgz -C macdist .
 
-platform.ml: platform_$(PLATFORM).ml
+platform.ml: @PLATFORM_ML@
 	cp $< $@
 
 include $(OCAMLMAKEFILE)
