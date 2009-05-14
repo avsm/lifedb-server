@@ -37,12 +37,12 @@ if test "$OCAML_PKG_sqlite3" = "no"; then
 fi
 
 AC_CHECK_OCAML_PKG([json-wheel])
-if test "$OCAML_PKG_json-wheel" = "no"; then
+if test "$OCAML_PKG_json_wheel" = "no"; then
   AC_MSG_ERROR([Please install OCaml findlib module 'json-wheel'])
 fi
 
 AC_CHECK_OCAML_PKG([json-static])
-if test "$OCAML_PKG_json-static" = "no"; then
+if test "$OCAML_PKG_json_static" = "no"; then
   AC_MSG_ERROR([Please install OCaml findlib module 'json-static'])
 fi
 

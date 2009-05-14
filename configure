@@ -4835,7 +4835,7 @@ $as_echo "not found" >&6; }
 
 
 
-if test "$OCAML_PKG_json-wheel" = "no"; then
+if test "$OCAML_PKG_json_wheel" = "no"; then
   { { $as_echo "$as_me:$LINENO: error: Please install OCaml findlib module 'json-wheel'" >&5
 $as_echo "$as_me: error: Please install OCaml findlib module 'json-wheel'" >&2;}
    { (exit 1); exit 1; }; }
@@ -4865,7 +4865,7 @@ $as_echo "not found" >&6; }
 
 
 
-if test "$OCAML_PKG_json-static" = "no"; then
+if test "$OCAML_PKG_json_static" = "no"; then
   { { $as_echo "$as_me:$LINENO: error: Please install OCaml findlib module 'json-static'" >&5
 $as_echo "$as_me: error: Please install OCaml findlib module 'json-static'" >&2;}
    { (exit 1); exit 1; }; }
