@@ -23,6 +23,8 @@ open Utils
 exception Task_error of string
 exception Internal_task_error of string
 
+let config_file_extension = ".conf"
+
 let m = Mutex.create ()
 
 type task_mode = 
@@ -124,7 +126,15 @@ let run_command name cmd cwd secret args silo =
     task_throttle ();
     task, (Some outfd), (Some errfd)
 
-let create_task task_name (p:Lifedb.Rpc.Task.in_t)  =
+let save_task task_name (p:Lifedb.Rpc.Task.in_t) =
+    assert(not (Mutex.try_lock m));
+    let cfname = Filename.concat (Lifedb_config.Dir.config ()) task_name ^ config_file_extension in
+    Json_io.save_json ~compact:false cfname (Lifedb.Rpc.Task.json_of_in_t p);
+    Log.logmod "Tasks" "Saved inbound task: %s" cfname
+
+(* Create a task from a parameter list.  If save is true, then persist it to
+   the config file *)
+let create_task ?(save=false) task_name (p:Lifedb.Rpc.Task.in_t)  =
     assert(not (Mutex.try_lock m));
     if Hashtbl.length task_list >= task_table_limit then
        raise (Task_error "too many tasks already registered");
@@ -146,7 +156,8 @@ let create_task task_name (p:Lifedb.Rpc.Task.in_t)  =
     let task = { cmd=pl#cmd; mode=mode; outfd=outfd; errfd=errfd; cwd=pl#dir; silo=p#silo;
        plugin=pl#name; secret=secret; start_time=now_time; running=task_status; args=p#args } in
     Hashtbl.add task_list task_name task;
-    Log.logmod "Tasks" "Created task '%s' %s" task_name (string_of_task task)
+    Log.logmod "Tasks" "Created task '%s' %s" task_name (string_of_task task);
+    if save then save_task task_name p
 
 let find_or_create_task name (t:Lifedb.Rpc.Task.in_t) =
     match find_task name with
@@ -237,13 +248,13 @@ let dispatch cgi = function
                (* delete the existing task and create a new one *)
                try
                   destroy_task name;
-                  create_task name params
+                  create_task ~save:true name params;
                with |Task_error err ->
                   Lifedb_rpc.return_error cgi `Bad_request "Task edit error" err
            end
            |None -> begin
                try
-                 create_task name params
+                 create_task ~save:true name params;
                with
                |Task_error err ->
                   Lifedb_rpc.return_error cgi `Bad_request "Task error" err
@@ -293,7 +304,6 @@ let task_regular_kick () =
     done
 
 (* scan the config directory and spawn tasks *)
-let config_file_extension = ".conf"
 let scan_config_file config_file =
     Log.logmod "Tasks" "Scanning config file %s" config_file;
     let task = Lifedb.Rpc.Task.in_t_of_json (Json_io.load_json config_file) in
