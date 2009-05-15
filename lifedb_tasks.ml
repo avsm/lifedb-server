@@ -233,8 +233,14 @@ let dispatch cgi = function
        let params = Lifedb.Rpc.Task.in_t_of_json (Json_io.json_of_string p) in
        with_lock m (fun () ->
            match find_task name with
-           |Some state ->
-               Lifedb_rpc.return_error cgi `Bad_request "Task already exists" "Use a different id"
+           |Some state -> begin
+               (* delete the existing task and create a new one *)
+               try
+                  destroy_task name;
+                  create_task name params
+               with |Task_error err ->
+                  Lifedb_rpc.return_error cgi `Bad_request "Task edit error" err
+           end
            |None -> begin
                try
                  create_task name params
