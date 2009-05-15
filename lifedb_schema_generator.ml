@@ -94,6 +94,6 @@ let sync = make [
 ]  
 
 let _ = 
-    Sql_orm.generate ~debug:true lifedb "lifedb_schema";
+    Sql_orm.generate ~debug:false lifedb "lifedb_schema";
     Sql_orm.generate ~debug:false sync "sync_schema";
     ()
