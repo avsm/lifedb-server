@@ -1987,7 +1987,6 @@ darwin*)
 esac
 PLATFORM_ML=platform_$plat.ml
 
-echo $PLATFORM_ML
 
 # Checks for programs.
 ac_ext=c
