@@ -93,7 +93,17 @@ let sync = make [
 
 ]  
 
+let log = make [
+  "task", [
+     text "name";
+     date "started";
+     real "time_taken";
+     integer "exit_code";
+   ], [];
+]
+
 let _ = 
     Sql_orm.generate ~debug:false lifedb "lifedb_schema";
     Sql_orm.generate ~debug:false sync "sync_schema";
+    Sql_orm.generate ~debug:false log "log_schema";
     ()

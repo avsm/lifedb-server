@@ -37,7 +37,7 @@ let push (l:log_request) =
         Condition.signal c;
     )
 
-let log_request db = function
+let log_request logdb = function
     |`Debug l ->
         let time = current_datetime () in
         AT.printf [AT.Foreground AT.Cyan] "[%s] " time;
@@ -54,30 +54,25 @@ let log_request db = function
         AT.printf [AT.Foreground AT.Cyan] "[%s]" time;
         AT.printf [AT.Foreground (col_of_module m)] "%.10s: " m;
         print_endline l
-    |`Plugin (plugin_name, plugin_time, exit_code) ->
+    |`Plugin (name, time_taken, exit_code) ->
         let time = current_datetime () in
-        let stmt = db#stmt "inslog" "insert into task_log values(NULL,?,?,?,?)" in
+        let started = Unix.gettimeofday () in
         let exit_code = Int64.of_int exit_code in
-        let dbint f = Data.INT (Int64.of_float f) in
-        db#transaction (fun () ->
-            stmt#bind4 (Data.TEXT plugin_name) (dbint (Unix.gettimeofday())) (dbint plugin_time) (Data.INT exit_code);
-            let _ = stmt#step_once in ()
-        );
+        let t = Log_schema.Task.t ~name ~started ~time_taken ~exit_code logdb in
+        ignore(t#save);
         AT.printf [AT.Foreground AT.Cyan] "[%s]" time;
-        AT.printf [AT.Foreground AT.Green] "%.10s: " plugin_name;
-        print_endline (sprintf "%f seconds, exit code %Ld" plugin_time exit_code)
+        AT.printf [AT.Foreground AT.Green] "%.10s: " name;
+        print_endline (sprintf "%f seconds, exit code %Ld" time_taken exit_code)
 
 let log_thread () =
     let logdbname = Filename.concat (Lifedb_config.Dir.log ()) "log.db" in
-    let db = new Sql_access.db logdbname in
-    db#exec "create table if not exists
-        task_log (id integer primary key autoincrement, name text, time_logged integer, time_taken integer, exit_code integer)";
+    let logdb = Log_schema.Init.t logdbname in
     while true do
         with_lock m (fun () ->
             if Queue.is_empty q then begin
                Condition.wait c m
             end;
-            log_request db (Queue.take q);
+            log_request logdb (Queue.take q);
         )
     done
 
