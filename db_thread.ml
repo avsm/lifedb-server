@@ -28,11 +28,7 @@ let maybe_signal = function
     |Some c -> Condition.signal c
 
 let db_thread () =
-    let busyfn db =
-       Log.logmod "Db_thread" "Mirror thread contention, backing off";
-       Thread.delay (2. +. (Random.float 5.))
-    in
-    let lifedb = Lifedb_schema.Init.t ~busyfn (Lifedb_config.Dir.lifedb_db ()) in
+    let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
     let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
     let lifedb' = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
     while true do
