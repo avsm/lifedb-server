@@ -18,55 +18,34 @@
 
 open Printf
 open Utils
-open Sqlite3
+module KS = Keychain_schema
 
-let store_passwd db time service username passwd =
+let store_passwd db (ctime:float) service username passwd =
     Log.logmod "Passwd" "Storing password for service=%s username=%s" service username;
-    let service' = Data.TEXT service in
-    let time' = Data.INT time in
-    let username' = Data.TEXT username in
-    match Passwords.encrypt_password time !Lifedb_rpc.passphrase passwd with
+    match Passwords.encrypt_password ctime !Lifedb_rpc.passphrase passwd with
     |Some encpasswd -> begin
-        let encpasswd' = Data.TEXT encpasswd in
-        let stmt = db#stmt "checkpass" "select service,username from passwd where service=? and username=?" in
-        stmt#bind2 service' username';
-        match stmt#step_once with
-           |0 ->
-               let stmt = db#stmt "inspass" "insert into passwd values(?,?,?,?)" in
-               stmt#bind4 service' time' username' encpasswd';
-               let _ = stmt#step_once in ()
-           |_ ->
-               let stmt = db#stmt "uppass" "update passwd set ctime=?,encpasswd=? where service=? and username=?" in
-               stmt#bind4 time' encpasswd' service' username'; 
-               let _ = stmt#step_once in ()
+        let p = match KS.Passwd.get_by_service_username ~service ~username db with
+        |[p] -> Log.logmod "Passwd" "editing"; p#set_ctime ctime; p#set_encpasswd encpasswd; p
+        |[] -> Log.logmod "Passwd" "new entry"; KS.Passwd.t ~service ~username ~ctime ~encpasswd db
+        |_ -> assert false in
+        ignore(p#save)
     end
     |None -> ()
 
 let get_passwd db service username =
     Log.logmod "Passwd" "Password request for service=%s username=%s" service username;
-    let service' = Data.TEXT service in
-    let username' = Data.TEXT username in
-    let stmt = db#stmt "getpass" "select ctime,encpasswd from passwd where service=? and username=?" in 
-    stmt#bind2 service' username';
-    match stmt#step_once with 
-    |0 -> None
-    |_ -> 
-        let time' = stmt#column 0 in
-        let encpasswd' = stmt#column 1 in
-        let time = match time' with |Data.INT x -> x |x -> Int64.of_string (Data.to_string x) in
-        let encpasswd = Data.to_string encpasswd' in
-        Passwords.decrypt_password time !Lifedb_rpc.passphrase encpasswd
+    match KS.Passwd.get_by_service_username ~service ~username db with
+    |[p] -> Passwords.decrypt_password p#ctime !Lifedb_rpc.passphrase p#encpasswd
+    |_ -> None
 
 let delete_passwd db service username =
     Log.logmod "Passwd" "Password delete request for service=%s username=%s" service username;
-    let service' = Data.TEXT service in
-    let username' = Data.TEXT username in
-    let stmt = db#stmt "delpass" "delete from passwd where service=? and username=?" in
-    stmt#bind2 service' username';
-    let _ = stmt#step_once in ()
+    match KS.Passwd.get_by_service_username ~service ~username db with
+    |[p] -> p#delete
+    |_ -> ()
 
 type passwd_req = 
-   |Store of int64 * string * string * string
+   |Store of float * string * string * string
    |Get of string * string
    |Delete of string * string
 
@@ -78,9 +57,7 @@ let lookup_passwd service username =
    Event.sync (Event.receive cresp)
 
 let passwd_thread () =
-    let db = new Sql_access.db (Lifedb_config.Dir.passwd_db ()) in
-    db#exec "create table if not exists passwd (service text, ctime integer,
-       username text, encpasswd text, primary key (service, username))";
+    let db = KS.Init.t (Lifedb_config.Dir.passwd_db ()) in
     while true do
        let e = Event.sync (Event.receive creq) in
        match e with
@@ -109,7 +86,7 @@ type json rpc_passwd_delete = <
 
 let dispatch (cgi:Netcgi.cgi_activation) = function
     |`Store arg -> begin
-        let ctime = Int64.of_float (Unix.gettimeofday ()) in
+        let ctime = Unix.gettimeofday () in
         let params = rpc_passwd_store_of_json (Json_io.json_of_string arg) in
         Event.sync (Event.send creq (Store (ctime, params#service, params#username, params#password)))
     end

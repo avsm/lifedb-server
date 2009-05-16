@@ -20,7 +20,7 @@ open Nethttpd_services
 open Nethttpd_reactor
 open Printf
 
-let http_config db lifedb syncdb =
+let http_config lifedb syncdb =
   let mime_types = read_media_types_file "./mime.types" in
   let static = {
     file_docroot = Lifedb_config.Dir.static ();
@@ -35,7 +35,7 @@ let http_config db lifedb syncdb =
         "*", (options_service());
         "/static", (file_service static);
         "/", (dynamic_service { 
-          dyn_handler = Lifedb_dispatch.handler db lifedb syncdb;
+          dyn_handler = Lifedb_dispatch.handler lifedb syncdb;
           dyn_activation = std_activation `Std_activation_buffered;
           dyn_uri = None;
           dyn_translator = (fun _ -> "");
@@ -74,10 +74,9 @@ let init () =
   Unix.listen master_sock 50;
 
   let http_config () =
-    let db = new Sql_access.db (Lifedb_config.Dir.lifedb_db ()) in
     let lifedb = Lifedb_schema.Init.t (Lifedb_config.Dir.lifedb_db ()) in
     let syncdb = Sync_schema.Init.t (Lifedb_config.Dir.sync_db ()) in
-    http_config db lifedb syncdb in
+    http_config lifedb syncdb in
   while true do
     try
       Gc.compact ();

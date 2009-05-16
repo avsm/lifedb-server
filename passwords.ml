@@ -38,7 +38,7 @@ let hash_of_string hfn s =
    of the time the password was stored.  this is the "salt" *)
 let key_of_passphrase time pass =
     let passhash = hash_of_string Hash.sha256 pass in
-    let timehash = hash_of_string Hash.md5 (sprintf "%Lu" time) in
+    let timehash = hash_of_string Hash.md5 (sprintf "%.0f" time) in
     passhash, timehash
 
 (* encrypt the password using the key and AES *)

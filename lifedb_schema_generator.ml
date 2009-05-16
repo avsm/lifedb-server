@@ -21,7 +21,7 @@ let lifedb = make [
   "attachment" , [
     text ~flags:[`Unique; `Index] "file_name";
     text "mime_type";
-  ], [ [], ["file_name"] ];
+  ], [ [], ["file_name"] ], default_opts;
 
   "contact" , [
     text "file_name";
@@ -29,24 +29,24 @@ let lifedb = make [
     text ~flags:[`Optional] "first_name";
     text ~flags:[`Optional] "last_name";
     date "mtime";
-  ], [];
+  ], [], default_opts;
 
   "mtype" , [
     text ~flags:[`Unique; `Index] "name";
     text "label";
     text ~flags:[`Optional] "icon";
     text "implements";
-  ], [ [],["name"] ];
+  ], [ [],["name"] ], default_opts;
 
   "service" , [
     text "name";
     text "uid";
     foreign ~flags:[`Optional] "contact" "contact";
-  ],[];
+  ],[], default_opts;
 
   "tag" , [
     text "name"
-  ], [];
+  ], [], default_opts;
 
   "entry" , [
     text ~flags:[`Unique; `Index] "uid";
@@ -65,20 +65,20 @@ let lifedb = make [
     [],["inbox";"delivered"];
     [],["uid"];
     [],["file_name"]
-  ];
+  ], default_opts;
 ]
 
 let sync = make [
   "dircache", [
     text "dir";
     date "mtime";
-  ],[];
+  ],[], default_opts;
 
   "filter_rule", [
     text "name";
     text "body";
     integer "zorder";
-  ],[];
+  ],[], default_opts;
 
   "user", [
     text ~flags:[`Unique; `Index] "uid";
@@ -89,7 +89,7 @@ let sync = make [
     blob "has_guids";
     blob "sent_guids";
     foreign_many "filter_rule" "filters";
-  ], [];
+  ], [], default_opts;
 
 ]  
 
@@ -99,11 +99,23 @@ let log = make [
      date "started";
      real "time_taken";
      integer "exit_code";
-   ], [];
+   ], [], default_opts;
+]
+
+let keychain = make [
+  "passwd", [
+     text "service";
+     date "ctime";
+     text "username";
+     text "encpasswd";
+   ], [
+     [], ["service";"username"] 
+   ], { unique = [ [ "service"; "username" ] ] }
 ]
 
 let _ = 
     Sql_orm.generate ~debug:false lifedb "lifedb_schema";
     Sql_orm.generate ~debug:false sync "sync_schema";
     Sql_orm.generate ~debug:false log "log_schema";
+    Sql_orm.generate ~debug:false keychain "keychain_schema";
     ()

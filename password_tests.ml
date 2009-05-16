@@ -31,7 +31,7 @@ let never = function
 (* Basic test to make sure an encrypted password is reversed
    successfully with the same passphrase and salt *)
 let test_encrypt_and_decrypt () =
-  let tod = Int64.of_float (Unix.gettimeofday () ) in
+  let tod = Unix.gettimeofday () in
   let origpass = "verysecret" in
   let encpass = must (encrypt_password tod "wibble" origpass) in
   let decpass = must(decrypt_password tod "wibble" encpass) in
@@ -41,15 +41,15 @@ let test_encrypt_and_decrypt () =
 
 (* ensure a bad passphrase causes an incorrect decrypt *) 
 let test_fail_decrypt () =
-  let tod = Int64.of_float (Unix.gettimeofday () ) in
+  let tod = Unix.gettimeofday () in
   let origpass = "verysecret" in
   let encpass = must(encrypt_password tod "wibble" origpass) in
   never(decrypt_password tod "foobar" encpass)
 
 (* ensure a different time causes incorrect decrypt *)
 let test_fail_decrypt_time () =
-  let tod = Int64.of_float (Unix.gettimeofday () ) in
-  let tod' = Int64.of_float (12345678.0) in
+  let tod = Unix.gettimeofday () in
+  let tod' = 12345678.0 in
   let origpass = "verysecret" in
   let encpass = must(encrypt_password tod "wibble" origpass) in
   never(decrypt_password tod' "wibble" encpass);
@@ -58,7 +58,7 @@ let test_fail_decrypt_time () =
 
 (* ensure different passwords dont have the same encrypted result *)
 let test_successive_encrypt () =
-  let tod = Int64.of_float (Unix.gettimeofday ()) in
+  let tod = Unix.gettimeofday () in
   let passwds = [ "one"; "two"; "three"; "four"; "five" ] in
   let encpasswds = List.map (encrypt_password tod "wobble") passwds in
   let h = Hashtbl.create 1 in
