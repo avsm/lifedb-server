@@ -30,8 +30,19 @@ let mark_get_rpc (cgi : Netcgi.cgi_activation) =
 let mark_delete_rpc (cgi : Netcgi.cgi_activation) =
     cgi#set_header ~cache:`No_cache ()
 
+(* modified version of Netstring.uripath_decode which can handle %2F in URLs *)
+let rec uripath_decode s =
+  let l = Neturl.split_path s in
+  Neturl.join_path (List.map (fun u ->
+    let u' = Netencoding.Url.decode ~plus:false u in
+    if String.contains u' '/' then
+      uripath_decode u'
+    else
+      u'
+  ) l)
+ 
 let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (cgi : Netcgi.cgi_activation) =
-    let u = Nethttp.uripath_decode (cgi#url ()) in
+    let u = uripath_decode (cgi#url ()) in
     let url = Neturl.parse_url u in
     let url_list = List.filter ((<>) "") (Neturl.url_path url) in
     let url_hd = try List.hd url_list with _ -> "" in
