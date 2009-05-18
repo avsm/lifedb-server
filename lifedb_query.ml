@@ -95,7 +95,7 @@ let dispatch lifedb syncdb env cgi = function
      end
    end
   |`Doc id ->
-     match LS.Entry.get ~id:(Some (Int64.of_string id)) lifedb with
+     match LS.Entry.get_by_uid id lifedb with
      |[] -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
      |[e] ->  begin
        let json = Entry.t_of_json (Json_io.load_json ~big_int_mode:true e#file_name) in
