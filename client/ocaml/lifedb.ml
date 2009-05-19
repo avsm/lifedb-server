@@ -146,6 +146,10 @@ module Rpc = struct
     and doc = <
       entry: t;
       contacts: (string, (string, contact) Hashtbl.t) Hashtbl.t
+    > 
+    and ts = <
+      results: int;
+      rows: t list
     >
   end
 
@@ -160,6 +164,5 @@ module Rpc = struct
       month: int;
       days: int array
     > 
-
   end
 end
