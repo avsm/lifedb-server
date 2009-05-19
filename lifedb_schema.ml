@@ -1368,6 +1368,38 @@ module Entry = struct
     (* execute the SQL query *)
     step_fold db stmt of_stmt
 
+  let get_file_name  ?(custom_where=("",[])) db =
+    let q = "" in
+    let q = match custom_where with |"",_ -> q |w,_ -> q ^ "WHERE  (" ^ w ^ ")" in
+    let sql="SELECT entry.id, entry.file_name FROM entry " ^ q in
+    let stmt=Sqlite3.prepare db.db sql in
+    ignore(match custom_where with |_,[] -> () |_,eb ->
+      let pos = ref 1 in
+      List.iter (fun b ->
+        db_must_ok db (fun () -> Sqlite3.bind stmt !pos b);
+        incr pos;
+      ) eb);
+    let t ~id ~file_name db = (file_name) in
+    (* convert statement into an ocaml object *)
+    let of_stmt stmt =
+    t
+      (* native fields *)
+      ~id:(
+      (match Sqlite3.column stmt 0 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry id")))
+      )
+      ~file_name:(
+      (match Sqlite3.column stmt 1 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      (* foreign fields *)
+    db
+    in 
+    (* execute the SQL query *)
+    step_fold db stmt of_stmt
+
   let get_created  ?(custom_where=("",[])) db =
     let q = "" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ "WHERE  (" ^ w ^ ")" in

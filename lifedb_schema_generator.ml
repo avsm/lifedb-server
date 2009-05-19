@@ -61,6 +61,7 @@ let lifedb = make [
     integer "delivered";
   ], [
     ["uid"],[];
+    ["file_name"],[];
     ["created"],[];
     [],["inbox";"delivered"];
     [],["uid"];

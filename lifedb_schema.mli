@@ -273,6 +273,10 @@ module Entry : sig
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
     string list
 
+  val get_file_name :
+    ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
+    string list
+
   val get_created :
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
     float list
