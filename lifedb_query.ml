@@ -30,11 +30,11 @@ let decl_of_db_mtype m =
     method icon=m#icon
   end
 
-let dispatch lifedb syncdb env cgi = function
+let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
   |`Date bits -> begin
      let intn n = int_of_string (List.nth bits n) in
      match List.length bits with
-     |3 -> (* specific day to query doc_ids *)
+     |3 -> begin (* specific day to query doc_ids *)
         let day,month,year = try
             intn 2, intn 1, intn 0
           with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path")
@@ -45,10 +45,21 @@ let dispatch lifedb syncdb env cgi = function
         let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
         let sqlfrom = sqldate datefrom in
         let sqlto = sqldate dateto in
-        let ids = LS.Entry.get_uid ~custom_where:("entry.created >= ? AND entry.created < ?", [sqlfrom; sqlto]) lifedb in
-        let d,_ = Unix.mktime datefrom in
-        let r = object method date=d method ids=ids end in
-        Lifedb_rpc.return_json cgi (Query.json_of_day_list r)
+        let custom_where = "entry.created >= ? AND entry.created < ?", [sqlfrom; sqlto] in
+        (* determine if we need a full query or just the ids, based on the query string *)
+        match cgi#argument_value ~default:"0" "full" = "1" with
+        |true-> (* return a Rpc.Entry.ts query set with full details of each entry *)
+          let es = List.map (fun fname ->
+             Entry.t_of_json (Json_io.load_json ~big_int_mode:true fname)
+          ) (LS.Entry.get_file_name ~custom_where lifedb) in
+          let r = object method results=List.length es  method rows=es end in
+          Lifedb_rpc.return_json cgi (Entry.json_of_ts r)
+        |false ->
+          let ids = LS.Entry.get_uid ~custom_where lifedb in
+          let d,_ = Unix.mktime datefrom in
+          let r = object method date=d method ids=ids end in
+          Lifedb_rpc.return_json cgi (Query.json_of_day_list r)
+     end
      |2 -> (* query the number of docs per day in a month *)
         let month,year = try intn 1, intn 0 with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path") in
         let btm = Unix.gmtime 0. in
