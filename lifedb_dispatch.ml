@@ -55,18 +55,6 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
   (* not authenticated *)
   |false -> begin
     match cgi#request_method, url_hd with
-    |`POST, "sync" ->
-      let username = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
-      let arg = mark_post_rpc cgi in
-      Lifedb_user.dispatch_sync lifedb syncdb cgi username arg
-    |`PUT arg, "sync" -> begin
-      match url_list with
-      |["sync";useruid;"_att";fileuid] ->
-        Lifedb_user.dispatch syncdb env cgi (`Attachment (arg, useruid, fileuid))
-      |["sync";useruid;"_entry";fileuid] ->
-        Lifedb_user.dispatch syncdb env cgi (`Entry (arg, useruid, fileuid))
-      |_ -> raise (Lifedb_rpc.Resource_not_found "unknown PUT request")
-    end
     |_ -> 
       return_need_auth cgi
   end
@@ -96,21 +84,6 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
     |"_all" -> `List
       |name -> `Get name)
 
-    |`POST, "outtask" ->
-      let arg = mark_post_rpc cgi in
-      let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
-      Lifedb_out_tasks.dispatch cgi (`Create (name,arg))
-    |`DELETE, "outtask" ->
-      mark_delete_rpc cgi;
-      let name = if List.length url_list < 2 then "_unknown" else List.nth url_list 1 in
-      Lifedb_out_tasks.dispatch cgi (`Destroy name)
-    |`GET, "outtask" ->
-      let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
-      mark_get_rpc cgi;
-      Lifedb_out_tasks.dispatch cgi (match tasksel with
-        |"_all" -> `List
-        |name -> `Get name)
-        
     |`GET, "plugin" ->
       let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
       mark_get_rpc cgi;
@@ -140,35 +113,6 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
     |(`GET|`HEAD), "pltype" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Mtype (List.tl url_list))
-
-    |`POST, "user" ->
-      let arg = mark_post_rpc cgi in
-      Lifedb_user.dispatch syncdb env cgi (`Create arg)
-    |`DELETE, "user" ->
-      mark_delete_rpc cgi;
-      let name = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
-      Lifedb_user.dispatch syncdb env cgi (`Delete name)
-    |`GET, "user" ->
-      let usersel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
-      mark_get_rpc cgi;
-      Lifedb_user.dispatch syncdb env cgi (match usersel with 
-        |"_all" -> `List
-        |name -> `Get name)
-
-    |`POST, "filter" ->
-      let arg = mark_post_rpc cgi in
-      let uid = if List.length url_list < 2 then "unknown" else List.nth url_list 1 in
-      Lifedb_user.dispatch syncdb env cgi (`Create_filter (uid,arg))
-    |`DELETE, "filter" ->
-      let uid,name = match url_list with |[_;uid;name] -> uid,name |_ -> "","" in
-      Lifedb_user.dispatch syncdb env cgi (`Delete_filter (uid,name))
-    |`GET, "filter" -> begin
-      mark_get_rpc cgi;
-      match url_list with
-      |["filter";useruid] -> Lifedb_user.dispatch syncdb env cgi (`List_filters useruid)
-      |["filter";useruid;fname] -> Lifedb_user.dispatch syncdb env cgi (`Get_filter (useruid, fname))
-      |_ -> raise (Resource_not_found "filter")
-    end
 
     |_ -> raise (Invalid_rpc "Unknown request")
   end

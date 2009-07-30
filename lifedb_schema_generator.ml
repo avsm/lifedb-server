@@ -75,23 +75,6 @@ let sync = make [
     date "mtime";
   ],[], default_opts;
 
-  "filter_rule", [
-    text "name";
-    text "body";
-    integer "zorder";
-  ],[], default_opts;
-
-  "user", [
-    text ~flags:[`Unique; `Index] "uid";
-    text "ip";
-    integer "port";
-    text "key";
-    date "last_sync";
-    blob "has_guids";
-    blob "sent_guids";
-    foreign_many "filter_rule" "filters";
-  ], [], default_opts;
-
 ]  
 
 let log = make [

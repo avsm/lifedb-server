@@ -49,7 +49,6 @@ let _ =
 
   (* the task manager thread *)
   Lifedb_tasks.init ();
-  Lifedb_out_tasks.init ();
 
   (* make and display various directories used by the server *)
   List.iter (fun (a,b) -> 
@@ -62,10 +61,6 @@ let _ =
   Db_thread.start ();
   Db_thread_access.push `Plugins;
   Db_thread_access.push `Tasks;
-  Db_thread_access.push `Out_tasks;
-
-  (* start the p2p sync thread *)
-  Lifedb_user.init ();
 
   (* start listening to HTTP connections *)
   Http_server.init ()

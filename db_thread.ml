@@ -42,7 +42,6 @@ let db_thread () =
         |`Lifedb -> Sql_mirror.do_scan lifedb syncdb throttle_check
         |`Plugins -> Lifedb_plugin.do_scan lifedb'
         |`Tasks -> Lifedb_tasks.do_scan ()
-        |`Out_tasks -> Lifedb_out_tasks.do_scan ()
         end;
         maybe_signal copt;
     done

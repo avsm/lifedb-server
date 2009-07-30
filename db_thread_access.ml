@@ -22,7 +22,6 @@ type scan_request = [
    |`Plugins
    |`Lifedb
    |`Tasks
-   |`Out_tasks
 ]
 
 let q = Queue.create ()
@@ -33,7 +32,6 @@ let string_of_scan_request = function
     |`Plugins -> "plugins"
     |`Lifedb -> "lifedb"
     |`Tasks -> "in_tasks"
-    |`Out_tasks -> "out_tasks"
 
 let dump_q () =
     printf "DB Queue: [";
