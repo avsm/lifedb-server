@@ -40,7 +40,7 @@ type task_state = {
    start_time: float; 
    silo: string;
    secret: (string * string) option;
-   args : string list option;
+   args : string list;
    outfd: Unix.file_descr option;
    errfd: Unix.file_descr option;
    running: Fork_helper.task;
@@ -99,7 +99,7 @@ let run_command name cmd cwd secret args silo =
          |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for this task"; [||]
       end
     in
-    let args = match args with None -> [||] | Some a -> Array.of_list a in
+    let args = Array.of_list args in
     let env = Array.append env args in
     let logdir = Lifedb_config.Dir.log() in
     let logfile = sprintf "%s/%s.log" logdir name in

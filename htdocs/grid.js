@@ -440,7 +440,7 @@ Ext.onReady(function(){
           mode: r.get('Mode'),
           period: r.get('Period'),
           silo: r.get('Silo'),
-          args: [], /* XXX TODO */
+          args: r.get('Args').split(","),
         };
         Ext.Ajax.request( {
           waitMsg: "saving inbound task...",

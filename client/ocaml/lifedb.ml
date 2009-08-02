@@ -73,7 +73,7 @@ module Rpc = struct
       silo: string;
       ?period: int option;
       ?secret: passwd option;
-      ?args: string list option
+      ?args: string list
      >
     and passwd = <
       service: string;
@@ -86,7 +86,7 @@ module Rpc = struct
       silo: string;
       ?period: int option;
       ?secret: passwd option;
-      ?args: string list option;
+      ?args: string list;
       ?pid: int option;
       duration: float  (* time the task has been running, float seconds *)
     >
