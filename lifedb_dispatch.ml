@@ -132,6 +132,7 @@ let handler lifedb syncdb env cgi =
   |Resource_conflict reason ->
     return_error cgi `Conflict "Resource conflict" reason
   |error ->
+    Log.logmod "HTTP" "error: %s" (Printexc.to_string error);
     cgi#output #rollback_work();
     cgi#set_header~status:`Internal_server_error ~cache:`No_cache ~content_type:"text/plain; charset=\"iso-8859-1\"" ();
     cgi#output#output_string "Unexpected software exception:\n";

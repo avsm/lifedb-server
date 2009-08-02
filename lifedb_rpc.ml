@@ -33,6 +33,7 @@ exception Resource_conflict of string
 let passphrase = ref ""
 
 let return_error (cgi:Netcgi.cgi_activation) (code:Nethttp.http_status) error reason =
+    Log.logmod "HTTP" "returning error: %s" reason;
     cgi#output#rollback_work ();
     cgi#set_header ~status:code ~cache:`No_cache 
         ~content_type:"application/json; charset=\"iso-8859-1\"" ();
