@@ -112,18 +112,20 @@ module Passwd = struct
     set_username : string -> unit;
     encpasswd : string;
     set_encpasswd : string -> unit;
+    comment : string;
+    set_comment : string -> unit;
     save: int64; delete: unit
   >
 
   let init db =
-    let sql = "create table if not exists passwd (id integer primary key autoincrement,service text,ctime real,username text,encpasswd text);" in
+    let sql = "create table if not exists passwd (id integer primary key autoincrement,service text,ctime real,username text,encpasswd text,comment text);" in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS passwd_grp_service__username_idx ON passwd (service,username) " in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     ()
 
   (* object definition *)
-  let t ?(id=None) ~service ~ctime ~username ~encpasswd db : t = object
+  let t ?(id=None) ~service ~ctime ~username ~encpasswd ~comment db : t = object
     (* get functions *)
     val mutable _id = id
     method id : int64 option = _id
@@ -135,6 +137,8 @@ module Passwd = struct
     method username : string = _username
     val mutable _encpasswd = encpasswd
     method encpasswd : string = _encpasswd
+    val mutable _comment = comment
+    method comment : string = _comment
 
     (* set functions *)
     method set_id v =
@@ -147,6 +151,8 @@ module Passwd = struct
       _username <- v
     method set_encpasswd v =
       _encpasswd <- v
+    method set_comment v =
+      _comment <- v
 
     (* admin functions *)
     method delete =
@@ -163,24 +169,26 @@ module Passwd = struct
       (* insert any foreign-one fields into their table and get id *)
       let _curobj_id = match _id with
       |None -> (* insert new record *)
-        let sql = "INSERT INTO passwd VALUES(NULL,?,?,?,?)" in
+        let sql = "INSERT INTO passwd VALUES(NULL,?,?,?,?,?)" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _service in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _ctime in Sqlite3.Data.FLOAT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _username in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 4 (let v = _encpasswd in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 5 (let v = _comment in Sqlite3.Data.TEXT v));
         db_must_done db (fun () -> Sqlite3.step stmt);
         let __id = Sqlite3.last_insert_rowid db.db in
         _id <- Some __id;
         __id
       |Some id -> (* update *)
-        let sql = "UPDATE passwd SET service=?,ctime=?,username=?,encpasswd=? WHERE id=?" in
+        let sql = "UPDATE passwd SET service=?,ctime=?,username=?,encpasswd=?,comment=? WHERE id=?" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _service in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _ctime in Sqlite3.Data.FLOAT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _username in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 4 (let v = _encpasswd in Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 5 (Sqlite3.Data.INT id));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 5 (let v = _comment in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 6 (Sqlite3.Data.INT id));
         db_must_done db (fun () -> Sqlite3.step stmt);
         id
       in
@@ -189,7 +197,7 @@ module Passwd = struct
   end
 
   (* General get function for any of the columns *)
-  let get ?(id=None) ?(service=None) ?(ctime=None) ?(username=None) ?(encpasswd=None) ?(custom_where=("",[])) db =
+  let get ?(id=None) ?(service=None) ?(ctime=None) ?(username=None) ?(encpasswd=None) ?(comment=None) ?(custom_where=("",[])) db =
     (* assemble the SQL query string *)
     let q = "" in
     let _first = ref true in
@@ -199,8 +207,9 @@ module Passwd = struct
     let q = match ctime with |None -> q |Some b -> q ^ (f()) ^ "passwd.ctime=?" in
     let q = match username with |None -> q |Some b -> q ^ (f()) ^ "passwd.username=?" in
     let q = match encpasswd with |None -> q |Some b -> q ^ (f()) ^ "passwd.encpasswd=?" in
+    let q = match comment with |None -> q |Some b -> q ^ (f()) ^ "passwd.comment=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ (f()) ^ "(" ^ w ^ ")" in
-    let sql="SELECT passwd.id, passwd.service, passwd.ctime, passwd.username, passwd.encpasswd FROM passwd " ^ q in
+    let sql="SELECT passwd.id, passwd.service, passwd.ctime, passwd.username, passwd.encpasswd, passwd.comment FROM passwd " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     (* bind the position variables to the statement *)
     let bindpos = ref 1 in
@@ -221,6 +230,10 @@ module Passwd = struct
       incr bindpos
     );
     ignore(match encpasswd with |None -> () |Some v ->
+      db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.TEXT v));
+      incr bindpos
+    );
+    ignore(match comment with |None -> () |Some v ->
       db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.TEXT v));
       incr bindpos
     );
@@ -258,6 +271,11 @@ module Passwd = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )
+      ~comment:(
+      (match Sqlite3.column stmt 5 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
       (* foreign fields *)
     db
     in 
@@ -267,7 +285,7 @@ module Passwd = struct
   let get_by_service_username ~service ~username ?(custom_where=("",[])) db =
     let q = "WHERE passwd.service=? AND passwd.username=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
-    let sql="SELECT passwd.id, passwd.service, passwd.ctime, passwd.username, passwd.encpasswd FROM passwd " ^ q in
+    let sql="SELECT passwd.id, passwd.service, passwd.ctime, passwd.username, passwd.encpasswd, passwd.comment FROM passwd " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     db_must_ok db (fun () -> let v = service in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
     db_must_ok db (fun () -> let v = username in Sqlite3.bind stmt 2 (Sqlite3.Data.TEXT v));
@@ -303,6 +321,11 @@ module Passwd = struct
       )
       ~encpasswd:(
       (match Sqlite3.column stmt 4 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~comment:(
+      (match Sqlite3.column stmt 5 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )

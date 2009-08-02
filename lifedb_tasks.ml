@@ -95,7 +95,7 @@ let run_command name cmd cwd secret args silo =
     let env = match secret with |None -> [||] 
       |Some (s,u) -> begin
          match Lifedb_passwd.lookup_passwd s u with
-         |Some p -> [| ("LIFEDB_PASSWORD=" ^ p); ("LIFEDB_USERNAME="^u) |] 
+         |Some (pass, _) -> [| ("LIFEDB_PASSWORD=" ^ pass); ("LIFEDB_USERNAME="^u) |] 
          |None -> Log.logmod "Tasks" "WARNING: unable to find passwd for this task"; [||]
       end
     in

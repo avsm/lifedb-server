@@ -64,6 +64,16 @@ module Rpc = struct
       rows: tr list
     >
     and decls = decl list
+    and passwd_t = <
+      password: string;
+      comment: string
+    > 
+    and passwd_r = <
+      service: string;
+      username: string;
+      password: string;
+      comment: string
+    >
   end
 
   module Task = struct

@@ -18,15 +18,17 @@
 
 open Printf
 open Utils
+open Lifedb_rpc
+
 module KS = Keychain_schema
 
-let store_passwd db (ctime:float) service username passwd =
+let store_passwd db (ctime:float) service username passwd comment =
     Log.logmod "Passwd" "Storing password for service=%s username=%s" service username;
     match Passwords.encrypt_password ctime !Lifedb_rpc.passphrase passwd with
     |Some encpasswd -> begin
         let p = match KS.Passwd.get_by_service_username ~service ~username db with
-        |[p] -> Log.logmod "Passwd" "editing"; p#set_ctime ctime; p#set_encpasswd encpasswd; p
-        |[] -> Log.logmod "Passwd" "new entry"; KS.Passwd.t ~service ~username ~ctime ~encpasswd db
+        |[p] -> Log.logmod "Passwd" "editing"; p#set_ctime ctime; p#set_encpasswd encpasswd; p#set_comment comment; p
+        |[] -> Log.logmod "Passwd" "new entry"; KS.Passwd.t ~service ~username ~ctime ~encpasswd ~comment db
         |_ -> assert false in
         ignore(p#save)
     end
@@ -35,7 +37,11 @@ let store_passwd db (ctime:float) service username passwd =
 let get_passwd db service username =
     Log.logmod "Passwd" "Password request for service=%s username=%s" service username;
     match KS.Passwd.get_by_service_username ~service ~username db with
-    |[p] -> Passwords.decrypt_password p#ctime !Lifedb_rpc.passphrase p#encpasswd
+    |[p] -> begin
+      match Passwords.decrypt_password p#ctime !Lifedb_rpc.passphrase p#encpasswd with
+      |None -> None
+      |Some encpasswd -> Some (encpasswd, p)
+    end
     |_ -> None
 
 let delete_passwd db service username =
@@ -45,7 +51,7 @@ let delete_passwd db service username =
     |_ -> ()
 
 type passwd_req = 
-   |Store of float * string * string * string
+   |Store of float * string * string * Lifedb.Rpc.Plugin.passwd_t
    |Get of string * string
    |Delete of string * string
 
@@ -61,8 +67,8 @@ let passwd_thread () =
     while true do
        let e = Event.sync (Event.receive creq) in
        match e with
-       |Store (time, service, username, password) -> 
-           store_passwd db time service username password
+       |Store (time, service, username, args) -> 
+           store_passwd db time service username args#password args#comment
        |Get (service, username) ->
            let r = get_passwd db service username in
            Event.sync (Event.send cresp r)
@@ -73,34 +79,27 @@ let passwd_thread () =
 let init () =
     let _ = Thread.create passwd_thread () in ()
 
-type json rpc_passwd_store = <
-    service: string;
-    username: string;
-    password: string
->
-
-type json rpc_passwd_delete = <
-    service: string;
-    username: string
->
-
 let dispatch (cgi:Netcgi.cgi_activation) = function
-    |`Store arg -> begin
+    |`Create (svc, uname, arg) -> begin
         let ctime = Unix.gettimeofday () in
-        let params = rpc_passwd_store_of_json (Json_io.json_of_string arg) in
-        Event.sync (Event.send creq (Store (ctime, params#service, params#username, params#password)))
+        let params = Lifedb.Rpc.Plugin.passwd_t_of_json (Json_io.json_of_string arg) in
+        Event.sync (Event.send creq (Store (ctime, svc, uname, params)))
     end
-    |`Delete arg -> begin
-        let params = rpc_passwd_delete_of_json (Json_io.json_of_string arg) in
-        Event.sync (Event.send creq (Delete (params#service, params#username)));
+    |`Delete (svc, uname) -> begin
+        Event.sync (Event.send creq (Delete (svc, uname)))
     end
     |`Get url_list -> begin
         match url_list with
         |[service; username] -> begin
             match lookup_passwd service username with
-            |Some encpasswd -> 
-                 let resp = object method service=service method username=username method password=encpasswd end in
-                 cgi#output#output_string (Json_io.string_of_json (json_of_rpc_passwd_store resp))
+            |Some (encpasswd,args) -> 
+                 let resp = object 
+                   method service=service 
+                   method username=username 
+                   method password=encpasswd 
+                   method comment=args#comment
+                  end in
+                 cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_passwd_r resp))
             |None ->
                  Lifedb_rpc.return_error cgi `Not_found "Passwd get error"
                     "Service/username not found"

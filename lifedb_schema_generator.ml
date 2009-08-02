@@ -90,6 +90,7 @@ let keychain = make [
      date "ctime";
      text "username";
      text "encpasswd";
+     text "comment";
    ], [
      [], ["service";"username"] 
    ], { unique = [ [ "service"; "username" ] ] }

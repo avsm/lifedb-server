@@ -28,6 +28,8 @@ module Passwd : sig
     set_username : string -> unit;
     encpasswd : string;
     set_encpasswd : string -> unit;
+    comment : string;
+    set_comment : string -> unit;
     save: int64; delete: unit
   >
 
@@ -40,6 +42,7 @@ module Passwd : sig
     ctime:float ->
     username:string ->
     encpasswd:string ->
+    comment:string ->
     Init.t -> t
   (** Can be used to construct a new object.  If [id] is not specified, it will be automatically assigned the first time [save] is called on the object.  The object is not committed to the database until [save] is invoked.  The [save] method will also return the [id] assigned to the object.
    @raise Sql_error if a database error is encountered
@@ -51,6 +54,7 @@ module Passwd : sig
     ?ctime:float option ->
     ?username:string option ->
     ?encpasswd:string option ->
+    ?comment:string option ->
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> t list
   (** Used to retrieve objects from the database.  If an argument is specified, it is included in the search criteria (all fields are ANDed together).
    @raise Sql_error if a database error is encountered

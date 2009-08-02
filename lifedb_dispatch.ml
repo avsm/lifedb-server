@@ -81,8 +81,8 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
       let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
       mark_get_rpc cgi;
       Lifedb_tasks.dispatch cgi (match tasksel with
-    |"_all" -> `List
-      |name -> `Get name)
+        |"_all" -> `List
+        |name -> `Get name)
 
     |`GET, "plugin" ->
       let tasksel = if List.length url_list < 2 then "_all" else List.nth url_list 1 in
@@ -95,15 +95,24 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
       ignore(mark_post_rpc cgi);
       if tasksel <> "_scan" then raise (Lifedb_rpc.Resource_not_found "unknown plugin request");
       Lifedb_plugin.dispatch cgi `Scan
-    |`POST, "passwd_create" ->
+
+
+    |`POST, "passwd" ->
       let arg = mark_post_rpc cgi in
-      Lifedb_passwd.dispatch cgi (`Store arg)
-    |`POST, "passwd_delete" ->
-      let arg = mark_post_rpc cgi in
-      Lifedb_passwd.dispatch cgi (`Delete arg)
+      Lifedb_passwd.dispatch cgi (match url_list with
+        |[_; service; username] -> `Create (service, username, arg)
+        |_ -> raise (Lifedb_rpc.Invalid_rpc "need service/username")
+      )
+    |`DELETE, "passwd" ->
+      mark_delete_rpc cgi;
+      Lifedb_passwd.dispatch cgi (match url_list with
+        |[_; service; username] -> `Delete (service, username)
+        |_ -> raise (Lifedb_rpc.Invalid_rpc "need service/username")
+      )
     |(`GET|`HEAD), "passwd" ->
       mark_get_rpc cgi;
       Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
+
     |(`GET|`HEAD), "date" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Date (List.tl url_list))
