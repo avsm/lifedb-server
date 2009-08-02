@@ -435,10 +435,13 @@ Ext.onReady(function(){
       mr = this.getStore().getModifiedRecords();
       for (var i = 0; i < mr.length; i++) {
         var r = mr[i];
+        var period = r.get('Period');
+        if (!period)
+           period = 0;
         var j = {
           plugin: r.get('Plugin'),
           mode: r.get('Mode'),
-          period: r.get('Period'),
+          period: period,
           silo: r.get('Silo'),
           args: r.get('Args').split(","),
         };
