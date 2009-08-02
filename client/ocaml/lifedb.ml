@@ -94,25 +94,6 @@ module Rpc = struct
       results: int;
       rows: in_r list
     >
-    and out_t = <
-      plugin : string;
-      pltype : string;
-      ?secret : passwd option;
-      ?args: string list option
-    >
-    and out_r = <
-      name: string;
-      plugin: string;
-      pltype: string;
-      ?secret: passwd option;
-      ?args: string list option;
-      ?pid: int option;
-      duration: float
-    > 
-    and out_rs = <
-      results: int;
-      rows: out_r list
-    >
   end
 
   module Entry = struct
