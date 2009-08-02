@@ -969,15 +969,13 @@ module Entry = struct
     set_atts : Attachment.t list -> unit;
     tags : Tag.t list;
     set_tags : Tag.t list -> unit;
-    inbox : string option;
-    set_inbox : string option -> unit;
     delivered : int64;
     set_delivered : int64 -> unit;
     save: int64; delete: unit
   >
 
   let init db =
-    let sql = "create table if not exists entry (id integer primary key autoincrement,uid text,file_name text,created real,mtype_id integer,from_id integer,inbox text,delivered integer);" in
+    let sql = "create table if not exists entry (id integer primary key autoincrement,uid text,file_name text,created real,mtype_id integer,from_id integer,delivered integer);" in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     let sql = "create table if not exists map_recipients_entry_service (entry_id integer, service_id integer, primary key(entry_id, service_id));" in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
@@ -989,12 +987,10 @@ module Entry = struct
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     let sql = "CREATE INDEX IF NOT EXISTS entry_created_idx ON entry (created) " in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
-    let sql = "CREATE INDEX IF NOT EXISTS entry_inbox_idx ON entry (inbox) " in
-    db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     ()
 
   (* object definition *)
-  let t ?(id=None) ~uid ~file_name ~created ~mtype ~from ~recipients ~atts ~tags ?(inbox=None) ~delivered db : t = object
+  let t ?(id=None) ~uid ~file_name ~created ~mtype ~from ~recipients ~atts ~tags ~delivered db : t = object
     (* get functions *)
     val mutable _id = id
     method id : int64 option = _id
@@ -1014,8 +1010,6 @@ module Entry = struct
     method atts : Attachment.t list = _atts
     val mutable _tags = tags
     method tags : Tag.t list = _tags
-    val mutable _inbox = inbox
-    method inbox : string option = _inbox
     val mutable _delivered = delivered
     method delivered : int64 = _delivered
 
@@ -1038,8 +1032,6 @@ module Entry = struct
       _atts <- v
     method set_tags v =
       _tags <- v
-    method set_inbox v =
-      _inbox <- v
     method set_delivered v =
       _delivered <- v
 
@@ -1060,30 +1052,28 @@ module Entry = struct
       let _from_id = from#save in
       let _curobj_id = match _id with
       |None -> (* insert new record *)
-        let sql = "INSERT INTO entry VALUES(NULL,?,?,?,?,?,?,?)" in
+        let sql = "INSERT INTO entry VALUES(NULL,?,?,?,?,?,?)" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _uid in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _file_name in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _created in Sqlite3.Data.FLOAT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 4 (let v = _mtype_id in Sqlite3.Data.INT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 5 (let v = _from_id in Sqlite3.Data.INT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 6 (match _inbox with |None -> Sqlite3.Data.NULL |Some v -> Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 7 (let v = _delivered in Sqlite3.Data.INT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 6 (let v = _delivered in Sqlite3.Data.INT v));
         db_must_done db (fun () -> Sqlite3.step stmt);
         let __id = Sqlite3.last_insert_rowid db.db in
         _id <- Some __id;
         __id
       |Some id -> (* update *)
-        let sql = "UPDATE entry SET uid=?,file_name=?,created=?,mtype_id=?,from_id=?,inbox=?,delivered=? WHERE id=?" in
+        let sql = "UPDATE entry SET uid=?,file_name=?,created=?,mtype_id=?,from_id=?,delivered=? WHERE id=?" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _uid in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _file_name in Sqlite3.Data.TEXT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _created in Sqlite3.Data.FLOAT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 4 (let v = _mtype_id in Sqlite3.Data.INT v));
         db_must_ok db (fun () -> Sqlite3.bind stmt 5 (let v = _from_id in Sqlite3.Data.INT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 6 (match _inbox with |None -> Sqlite3.Data.NULL |Some v -> Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 7 (let v = _delivered in Sqlite3.Data.INT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 8 (Sqlite3.Data.INT id));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 6 (let v = _delivered in Sqlite3.Data.INT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 7 (Sqlite3.Data.INT id));
         db_must_done db (fun () -> Sqlite3.step stmt);
         id
       in
@@ -1131,7 +1121,7 @@ module Entry = struct
   end
 
   (* General get function for any of the columns *)
-  let get ?(id=None) ?(uid=None) ?(file_name=None) ?(created=None) ?(inbox=None) ?(delivered=None) ?(custom_where=("",[])) db =
+  let get ?(id=None) ?(uid=None) ?(file_name=None) ?(created=None) ?(delivered=None) ?(custom_where=("",[])) db =
     (* assemble the SQL query string *)
     let q = "" in
     let _first = ref true in
@@ -1140,10 +1130,9 @@ module Entry = struct
     let q = match uid with |None -> q |Some b -> q ^ (f()) ^ "entry.uid=?" in
     let q = match file_name with |None -> q |Some b -> q ^ (f()) ^ "entry.file_name=?" in
     let q = match created with |None -> q |Some b -> q ^ (f()) ^ "entry.created=?" in
-    let q = match inbox with |None -> q |Some b -> q ^ (f()) ^ "entry.inbox=?" in
     let q = match delivered with |None -> q |Some b -> q ^ (f()) ^ "entry.delivered=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ (f()) ^ "(" ^ w ^ ")" in
-    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.inbox, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
+    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     (* bind the position variables to the statement *)
     let bindpos = ref 1 in
@@ -1161,10 +1150,6 @@ module Entry = struct
     );
     ignore(match created with |None -> () |Some v ->
       db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.FLOAT v));
-      incr bindpos
-    );
-    ignore(match inbox with |None -> () |Some v ->
-      db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.TEXT v));
       incr bindpos
     );
     ignore(match delivered with |None -> () |Some v ->
@@ -1200,13 +1185,8 @@ module Entry = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry created"))
       )
-      ~inbox:(
-      (match Sqlite3.column stmt 15 with
-        |Sqlite3.Data.NULL -> None
-        |x -> Some (Sqlite3.Data.to_string x))
-      )
       ~delivered:(
-      (match Sqlite3.column stmt 16 with
+      (match Sqlite3.column stmt 15 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry delivered"))
       )
@@ -1267,32 +1247,32 @@ module Entry = struct
             Contact.t
               (* native fields *)
               ~id:(
-              (match Sqlite3.column stmt 17 with
+              (match Sqlite3.column stmt 16 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact id")))
               )
               ~file_name:(
-              (match Sqlite3.column stmt 18 with
+              (match Sqlite3.column stmt 17 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~uid:(
-              (match Sqlite3.column stmt 19 with
+              (match Sqlite3.column stmt 18 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~first_name:(
-              (match Sqlite3.column stmt 20 with
+              (match Sqlite3.column stmt 19 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~last_name:(
-              (match Sqlite3.column stmt 21 with
+              (match Sqlite3.column stmt 20 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~mtime:(
-              (match Sqlite3.column stmt 22 with
+              (match Sqlite3.column stmt 21 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact mtime"))
               )
@@ -1432,183 +1412,10 @@ module Entry = struct
     (* execute the SQL query *)
     step_fold db stmt of_stmt
 
-  let get_by_inbox_delivered ~inbox ~delivered ?(custom_where=("",[])) db =
-    let q = "WHERE entry.inbox=? AND entry.delivered=?" in
-    let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
-    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.inbox, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
-    let stmt=Sqlite3.prepare db.db sql in
-    db_must_ok db (fun () -> Sqlite3.bind stmt 1 (match inbox with |None -> Sqlite3.Data.NONE |Some v -> Sqlite3.Data.TEXT v));
-    db_must_ok db (fun () -> let v = delivered in Sqlite3.bind stmt 2 (Sqlite3.Data.INT v));
-    ignore(match custom_where with |_,[] -> () |_,eb ->
-      let pos = ref 3 in
-      List.iter (fun b ->
-        db_must_ok db (fun () -> Sqlite3.bind stmt !pos b);
-        incr pos;
-      ) eb);
-    (* convert statement into an ocaml object *)
-    let of_stmt stmt =
-    t
-      (* native fields *)
-      ~id:(
-      (match Sqlite3.column stmt 9 with
-        |Sqlite3.Data.NULL -> None
-        |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry id")))
-      )
-      ~uid:(
-      (match Sqlite3.column stmt 10 with
-        |Sqlite3.Data.NULL -> failwith "null of_stmt"
-        |x -> Sqlite3.Data.to_string x)
-      )
-      ~file_name:(
-      (match Sqlite3.column stmt 11 with
-        |Sqlite3.Data.NULL -> failwith "null of_stmt"
-        |x -> Sqlite3.Data.to_string x)
-      )
-      ~created:(
-      (match Sqlite3.column stmt 12 with
-        |Sqlite3.Data.NULL -> failwith "null of_stmt"
-        |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry created"))
-      )
-      ~inbox:(
-      (match Sqlite3.column stmt 15 with
-        |Sqlite3.Data.NULL -> None
-        |x -> Some (Sqlite3.Data.to_string x))
-      )
-      ~delivered:(
-      (match Sqlite3.column stmt 16 with
-        |Sqlite3.Data.NULL -> failwith "null of_stmt"
-        |x -> match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry delivered"))
-      )
-      (* foreign fields *)
-      ~mtype:(
-        Mtype.t
-          (* native fields *)
-          ~id:(
-          (match Sqlite3.column stmt 4 with
-            |Sqlite3.Data.NULL -> None
-            |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_mtype id")))
-          )
-          ~name:(
-          (match Sqlite3.column stmt 5 with
-            |Sqlite3.Data.NULL -> failwith "null of_stmt"
-            |x -> Sqlite3.Data.to_string x)
-          )
-          ~label:(
-          (match Sqlite3.column stmt 6 with
-            |Sqlite3.Data.NULL -> failwith "null of_stmt"
-            |x -> Sqlite3.Data.to_string x)
-          )
-          ~icon:(
-          (match Sqlite3.column stmt 7 with
-            |Sqlite3.Data.NULL -> None
-            |x -> Some (Sqlite3.Data.to_string x))
-          )
-          ~implements:(
-          (match Sqlite3.column stmt 8 with
-            |Sqlite3.Data.NULL -> failwith "null of_stmt"
-            |x -> Sqlite3.Data.to_string x)
-          )
-          (* foreign fields *)
-        db
-        )
-      ~from:(
-        Service.t
-          (* native fields *)
-          ~id:(
-          (match Sqlite3.column stmt 0 with
-            |Sqlite3.Data.NULL -> None
-            |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from id")))
-          )
-          ~name:(
-          (match Sqlite3.column stmt 1 with
-            |Sqlite3.Data.NULL -> failwith "null of_stmt"
-            |x -> Sqlite3.Data.to_string x)
-          )
-          ~uid:(
-          (match Sqlite3.column stmt 2 with
-            |Sqlite3.Data.NULL -> failwith "null of_stmt"
-            |x -> Sqlite3.Data.to_string x)
-          )
-          (* foreign fields *)
-          ~contact:(
-            (try
-            Some (
-            Contact.t
-              (* native fields *)
-              ~id:(
-              (match Sqlite3.column stmt 17 with
-                |Sqlite3.Data.NULL -> None
-                |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact id")))
-              )
-              ~file_name:(
-              (match Sqlite3.column stmt 18 with
-                |Sqlite3.Data.NULL -> failwith "null of_stmt"
-                |x -> Sqlite3.Data.to_string x)
-              )
-              ~uid:(
-              (match Sqlite3.column stmt 19 with
-                |Sqlite3.Data.NULL -> failwith "null of_stmt"
-                |x -> Sqlite3.Data.to_string x)
-              )
-              ~first_name:(
-              (match Sqlite3.column stmt 20 with
-                |Sqlite3.Data.NULL -> None
-                |x -> Some (Sqlite3.Data.to_string x))
-              )
-              ~last_name:(
-              (match Sqlite3.column stmt 21 with
-                |Sqlite3.Data.NULL -> None
-                |x -> Some (Sqlite3.Data.to_string x))
-              )
-              ~mtime:(
-              (match Sqlite3.column stmt 22 with
-                |Sqlite3.Data.NULL -> failwith "null of_stmt"
-                |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact mtime"))
-              )
-              (* foreign fields *)
-            db
-            ) with _ -> None))
-        db
-        )
-      ~recipients:(
-        (* foreign many-many mapping field *)
-        let sql' = "select service_id from map_recipients_entry_service where entry_id=?" in
-        let stmt' = Sqlite3.prepare db.db sql' in
-        let entry__id = Sqlite3.column stmt 9 in
-        db_must_ok db (fun () -> Sqlite3.bind stmt' 1 entry__id);
-        List.flatten (step_fold db stmt' (fun s ->
-          let i = match Sqlite3.column s 0 with |Sqlite3.Data.INT i -> i |_ -> assert false in
-          Service.get ~id:(Some i) db)
-        ))
-      ~atts:(
-        (* foreign many-many mapping field *)
-        let sql' = "select attachment_id from map_atts_entry_attachment where entry_id=?" in
-        let stmt' = Sqlite3.prepare db.db sql' in
-        let entry__id = Sqlite3.column stmt 9 in
-        db_must_ok db (fun () -> Sqlite3.bind stmt' 1 entry__id);
-        List.flatten (step_fold db stmt' (fun s ->
-          let i = match Sqlite3.column s 0 with |Sqlite3.Data.INT i -> i |_ -> assert false in
-          Attachment.get ~id:(Some i) db)
-        ))
-      ~tags:(
-        (* foreign many-many mapping field *)
-        let sql' = "select tag_id from map_tags_entry_tag where entry_id=?" in
-        let stmt' = Sqlite3.prepare db.db sql' in
-        let entry__id = Sqlite3.column stmt 9 in
-        db_must_ok db (fun () -> Sqlite3.bind stmt' 1 entry__id);
-        List.flatten (step_fold db stmt' (fun s ->
-          let i = match Sqlite3.column s 0 with |Sqlite3.Data.INT i -> i |_ -> assert false in
-          Tag.get ~id:(Some i) db)
-        ))
-    db
-    in 
-    (* execute the SQL query *)
-    step_fold db stmt of_stmt
-
   let get_by_uid ~uid ?(custom_where=("",[])) db =
     let q = "WHERE entry.uid=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
-    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.inbox, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
+    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     db_must_ok db (fun () -> let v = uid in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
     ignore(match custom_where with |_,[] -> () |_,eb ->
@@ -1641,13 +1448,8 @@ module Entry = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry created"))
       )
-      ~inbox:(
-      (match Sqlite3.column stmt 15 with
-        |Sqlite3.Data.NULL -> None
-        |x -> Some (Sqlite3.Data.to_string x))
-      )
       ~delivered:(
-      (match Sqlite3.column stmt 16 with
+      (match Sqlite3.column stmt 15 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry delivered"))
       )
@@ -1708,32 +1510,32 @@ module Entry = struct
             Contact.t
               (* native fields *)
               ~id:(
-              (match Sqlite3.column stmt 17 with
+              (match Sqlite3.column stmt 16 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact id")))
               )
               ~file_name:(
-              (match Sqlite3.column stmt 18 with
+              (match Sqlite3.column stmt 17 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~uid:(
-              (match Sqlite3.column stmt 19 with
+              (match Sqlite3.column stmt 18 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~first_name:(
-              (match Sqlite3.column stmt 20 with
+              (match Sqlite3.column stmt 19 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~last_name:(
-              (match Sqlite3.column stmt 21 with
+              (match Sqlite3.column stmt 20 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~mtime:(
-              (match Sqlite3.column stmt 22 with
+              (match Sqlite3.column stmt 21 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact mtime"))
               )
@@ -1780,7 +1582,7 @@ module Entry = struct
   let get_by_file_name ~file_name ?(custom_where=("",[])) db =
     let q = "WHERE entry.file_name=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
-    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.inbox, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
+    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry_mtype.id, entry_mtype.name, entry_mtype.label, entry_mtype.icon, entry_mtype.implements, entry.id, entry.uid, entry.file_name, entry.created, entry.mtype_id, entry.from_id, entry.delivered, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN mtype AS entry_mtype ON (entry_mtype.id = entry.mtype_id) LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     db_must_ok db (fun () -> let v = file_name in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
     ignore(match custom_where with |_,[] -> () |_,eb ->
@@ -1813,13 +1615,8 @@ module Entry = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry created"))
       )
-      ~inbox:(
-      (match Sqlite3.column stmt 15 with
-        |Sqlite3.Data.NULL -> None
-        |x -> Some (Sqlite3.Data.to_string x))
-      )
       ~delivered:(
-      (match Sqlite3.column stmt 16 with
+      (match Sqlite3.column stmt 15 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry delivered"))
       )
@@ -1880,32 +1677,32 @@ module Entry = struct
             Contact.t
               (* native fields *)
               ~id:(
-              (match Sqlite3.column stmt 17 with
+              (match Sqlite3.column stmt 16 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact id")))
               )
               ~file_name:(
-              (match Sqlite3.column stmt 18 with
+              (match Sqlite3.column stmt 17 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~uid:(
-              (match Sqlite3.column stmt 19 with
+              (match Sqlite3.column stmt 18 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> Sqlite3.Data.to_string x)
               )
               ~first_name:(
-              (match Sqlite3.column stmt 20 with
+              (match Sqlite3.column stmt 19 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~last_name:(
-              (match Sqlite3.column stmt 21 with
+              (match Sqlite3.column stmt 20 with
                 |Sqlite3.Data.NULL -> None
                 |x -> Some (Sqlite3.Data.to_string x))
               )
               ~mtime:(
-              (match Sqlite3.column stmt 22 with
+              (match Sqlite3.column stmt 21 with
                 |Sqlite3.Data.NULL -> failwith "null of_stmt"
                 |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact mtime"))
               )

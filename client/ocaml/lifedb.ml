@@ -7,13 +7,11 @@ module Rpc = struct
   module Config = struct
     type json t = <
       lifedb_directory: string;
-      inbox_directory: string;
       config_directory: string;
       plugins_directory: string list;
       log_directory: string;
       cache_directory: string;
       static_directory: string;
-      username: string;
       port: int
     >
   end

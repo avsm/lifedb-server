@@ -230,8 +230,6 @@ module Entry : sig
     set_atts : Attachment.t list -> unit;
     tags : Tag.t list;
     set_tags : Tag.t list -> unit;
-    inbox : string option;
-    set_inbox : string option -> unit;
     delivered : int64;
     set_delivered : int64 -> unit;
     save: int64; delete: unit
@@ -250,7 +248,6 @@ module Entry : sig
     recipients:Service.t list ->
     atts:Attachment.t list ->
     tags:Tag.t list ->
-    ?inbox:string option ->
     delivered:int64 ->
     Init.t -> t
   (** Can be used to construct a new object.  If [id] is not specified, it will be automatically assigned the first time [save] is called on the object.  The object is not committed to the database until [save] is invoked.  The [save] method will also return the [id] assigned to the object.
@@ -262,7 +259,6 @@ module Entry : sig
     ?uid:string option ->
     ?file_name:string option ->
     ?created:float option ->
-    ?inbox:string option ->
     ?delivered:int64 option ->
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> t list
   (** Used to retrieve objects from the database.  If an argument is specified, it is included in the search criteria (all fields are ANDed together).
@@ -280,12 +276,6 @@ module Entry : sig
   val get_created :
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
     float list
-
-  val get_by_inbox_delivered :
-    inbox:string option -> 
-    delivered:int64 -> 
-    ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
-    t list
 
   val get_by_uid :
     uid:string -> 

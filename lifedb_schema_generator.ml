@@ -57,13 +57,11 @@ let lifedb = make [
     foreign_many "service" "recipients";
     foreign_many "attachment" "atts";
     foreign_many "tag" "tags";
-    text ~flags:[`Optional; `Index] "inbox";
     integer "delivered";
   ], [
     ["uid"],[];
     ["file_name"],[];
     ["created"],[];
-    [],["inbox";"delivered"];
     [],["uid"];
     [],["file_name"]
   ], default_opts;
