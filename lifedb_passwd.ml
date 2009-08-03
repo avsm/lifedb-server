@@ -22,6 +22,10 @@ open Lifedb_rpc
 
 module KS = Keychain_schema
 
+(*
+ XXX The separate channel here is cludge to avoid some MT issues with the old 
+     version of Sqlite in MacOS X base, can be removed with a newer one - avsm *)
+
 let store_passwd db (ctime:float) service username passwd comment =
     Log.logmod "Passwd" "Storing password for service=%s username=%s" service username;
     match Passwords.encrypt_password ctime !Lifedb_rpc.passphrase passwd with
@@ -50,13 +54,26 @@ let delete_passwd db service username =
     |[p] -> p#delete
     |_ -> ()
 
+let get_all_services db =
+    Log.logmod "Passwd" "Password list request";
+    List.map (fun p ->
+      object
+        method service=p#service
+        method username=p#username
+        method password=""
+        method comment=p#comment
+      end
+    ) (KS.Passwd.get db)
+
 type passwd_req = 
    |Store of float * string * string * Lifedb.Rpc.Plugin.passwd_t
    |Get of string * string
+   |List
    |Delete of string * string
 
 let creq = Event.new_channel ()
 let cresp = Event.new_channel ()
+let crespl = Event.new_channel ()
 
 let lookup_passwd service username =
    Event.sync (Event.send creq (Get (service, username)));
@@ -74,6 +91,8 @@ let passwd_thread () =
            Event.sync (Event.send cresp r)
        |Delete (service, username) ->
            delete_passwd db service username
+       |List ->
+           Event.sync (Event.send crespl (get_all_services db))
     done
 
 let init () =
@@ -88,22 +107,20 @@ let dispatch (cgi:Netcgi.cgi_activation) = function
     |`Delete (svc, uname) -> begin
         Event.sync (Event.send creq (Delete (svc, uname)))
     end
-    |`Get url_list -> begin
-        match url_list with
-        |[service; username] -> begin
-            match lookup_passwd service username with
-            |Some (encpasswd,args) -> 
-                 let resp = object 
-                   method service=service 
-                   method username=username 
-                   method password=encpasswd 
-                   method comment=args#comment
-                  end in
-                 cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_passwd_r resp))
-            |None ->
-                 Lifedb_rpc.return_error cgi `Not_found "Passwd get error"
-                    "Service/username not found"
-        end
-        |_ -> Lifedb_rpc.return_error cgi `Bad_request "Passwd get error"
-            "Must specify service/username in URL"
+    |`List ->
+        Event.sync (Event.send creq List);
+        let rs = Event.sync (Event.receive crespl) in
+        cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_passwd_rs (results_of_search rs)));
+    |`Get (service, username) -> begin
+        match lookup_passwd service username with
+        |Some (encpasswd,args) -> 
+          let resp = object 
+            method service=service 
+            method username=username 
+            method password=encpasswd 
+            method comment=args#comment
+          end in
+          cgi#output#output_string (Json_io.string_of_json (Lifedb.Rpc.Plugin.json_of_passwd_r resp))
+        |None ->
+          Lifedb_rpc.return_error cgi `Not_found "Passwd get error" "Service/username not found"
     end

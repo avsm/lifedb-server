@@ -73,6 +73,9 @@ module Rpc = struct
       username: string;
       password: string;
       comment: string
+    > and passwd_rs = <
+      results: int;
+      rows: passwd_r list
     >
   end
 

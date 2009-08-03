@@ -94,8 +94,7 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
       let tasksel = if List.length url_list < 2 then "_scan" else List.nth url_list 1 in
       ignore(mark_post_rpc cgi);
       if tasksel <> "_scan" then raise (Lifedb_rpc.Resource_not_found "unknown plugin request");
-      Lifedb_plugin.dispatch cgi `Scan
-
+      Lifedb_plugin.dispatch cgi `List 
 
     |`POST, "passwd" ->
       let arg = mark_post_rpc cgi in
@@ -111,7 +110,11 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
       )
     |(`GET|`HEAD), "passwd" ->
       mark_get_rpc cgi;
-      Lifedb_passwd.dispatch cgi (`Get (List.tl url_list))
+      Lifedb_passwd.dispatch cgi (match url_list with
+        |[hd] -> `List
+        |[hd;service;username] -> `Get (service, username)
+        |_ -> raise (Lifedb_rpc.Invalid_rpc "need service/username")
+     );
 
     |(`GET|`HEAD), "date" ->
       mark_get_rpc cgi;
