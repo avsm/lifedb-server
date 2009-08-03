@@ -32,6 +32,135 @@ Ext.onReady(function(){
       }, Plugin)
     });
 
+    // ------ PASSWORD STORE ----
+    var Password = Ext.data.Record.create([
+      {name: 'Service', mapping: 'service'},
+      {name: 'Username', mapping: 'username'},
+      {name: 'Password', mapping: 'password'},
+      {name: 'Comment', mapping: 'comment'},
+    ]);
+
+    // create the Data Store
+    var password_store = new Ext.data.GroupingStore({
+
+        proxy: new Ext.data.HttpProxy({
+            method: 'GET',
+            url:'/passwd'
+        }),
+
+        reader: new Ext.data.JsonReader({
+            totalProperty: 'results',
+            root: 'rows',
+        }, Password)
+    });
+
+    var password_editor = new Ext.ux.RowEditor({
+        saveText: 'Update'
+    });
+
+    // create the passwd grid
+    var password_grid = new Ext.grid.GridPanel({
+
+        store: password_store,
+        title: 'Keychain',
+        plugins: [password_editor],
+        view: new Ext.grid.GroupingView({ markDirty: false }),
+        columns: [
+            {header: "Service", dataIndex: 'Service', sortable: true,
+              editor: new fm.TextField({ allowBlank: false, }) },
+            {header: "Username", dataIndex: 'Username', sortable: true,
+              editor: new fm.TextField({ allowBlank: false, }) },
+            {header: "Password", dataIndex: 'Password', sortable: false,
+              editor: new fm.TextField({ allowBlank: false, inputType: 'password' }) },
+            {header: "Comment", dataIndex: 'Comment', sortable: false,
+              editor: new fm.TextField({ allowBlank: false, }) },
+          ],
+        clicksToEdit:1,
+        width:700,
+        height:150,
+
+        tbar: [{
+          iconCls: 'icon-task-add',
+          ref : '../addBtn',
+          text: 'Add Service',
+          handler : function() {
+            var u = new Password({
+              Service: '',
+              Username: '',
+              Password: '',
+              Comment: '',
+            });
+            password_editor.stopEditing();
+            password_store.insert(0, u);
+            password_grid.getView().refresh();
+            password_grid.getSelectionModel().selectRow(0);
+            password_editor.startEditing(0);
+          }
+        },
+        {
+          ref : '../removeBtn',
+          iconCls: 'icon-task-delete',
+          disabled: true,
+          text: 'Delete Service',
+          handler : function () {
+             password_editor.stopEditing();
+             var s = password_grid.getSelectionModel().getSelections();
+             for(var i = 0, r; r = s[i]; i++) {
+               Ext.Ajax.request({
+                 url: '/passwd/' + r.get('Service') + '/' + r.get('Username'),
+                 method : 'DELETE',
+                 success: function(request, result) {
+                   password_store.reload ();
+                 },
+                 failure: function(request, result) {
+                   Ext.Msg.alert('Keychain', 'Service failed!');
+                 },
+               });
+             }
+           }
+          }]
+
+        });
+
+    function applyPasswordChanges() {
+      console.log('applyPasswordChanges');
+      mr = this.getStore().getModifiedRecords();
+      for (var i = 0; i < mr.length; i++) {
+        var r = mr[i];
+        var j = {
+          service: r.get('Service'),
+          username: r.get('Username'),
+          password: r.get('Password'),
+          comment: r.get('Comment'),
+        };
+        Ext.Ajax.request( {
+          waitMsg: "saving service...",
+          url: '/passwd/' + r.get('Service') + '/' + r.get('Username'),
+          method: 'POST',
+          jsonData:  j,
+          success: function (request, result) {
+            r.commit();
+          },
+          failure: function (request, result) {
+            Ext.Msg.alert('Keychain', 'Failed to edit service: ' + result.responseText);
+          },
+        });
+      }
+      this.getStore().reload();
+    }
+
+    password_store.on('update', applyPasswordChanges, password_grid);
+
+    password_grid.getSelectionModel().on('selectionchange', function(sm){
+        password_grid.removeBtn.setDisabled(sm.getCount() < 1);
+    });
+
+    password_panel = new Ext.Panel({
+      title: 'Keychain',
+      collapsible:true,
+      items: [ password_grid ],
+    });
+
     // ---------------- IN TASK 
 
     var InTask = Ext.data.Record.create([
@@ -192,136 +321,7 @@ Ext.onReady(function(){
     });
 
 
-    // ------ PASSWORD STORE ----
-    var Password = Ext.data.Record.create([
-      {name: 'Service', mapping: 'service'},
-      {name: 'Username', mapping: 'username'},
-      {name: 'Password', mapping: 'password'},
-      {name: 'Comment', mapping: 'comment'},
-    ]);
 
-    // create the Data Store
-    var password_store = new Ext.data.GroupingStore({
-
-        proxy: new Ext.data.HttpProxy({
-            method: 'GET',
-            url:'/passwd'
-        }),
-
-        reader: new Ext.data.JsonReader({
-            totalProperty: 'results',
-            root: 'rows',
-        }, Password)
-    });
-
-    var password_editor = new Ext.ux.RowEditor({
-        saveText: 'Update'
-    });
-
-    // create the passwd grid
-    var password_grid = new Ext.grid.GridPanel({
-
-        store: password_store,
-        title: 'Keychain',
-        plugins: [password_editor],
-        view: new Ext.grid.GroupingView({ markDirty: false }),
-        columns: [
-            {header: "Service", dataIndex: 'Service', sortable: true,
-              editor: new fm.TextField({ allowBlank: false, }) },
-            {header: "Username", dataIndex: 'Username', sortable: true,
-              editor: new fm.TextField({ allowBlank: false, }) },
-            {header: "Password", dataIndex: 'Password', sortable: false,
-              editor: new fm.TextField({ allowBlank: false, inputType: 'password' }) },
-            {header: "Comment", dataIndex: 'Comment', sortable: false,
-              editor: new fm.TextField({ allowBlank: false, }) },
-          ],
-        clicksToEdit:1,
-        width:700,
-        height:150,
-
-        tbar: [{
-          iconCls: 'icon-task-add',
-          ref : '../addBtn',
-          text: 'Add Service',
-          handler : function() {
-            var u = new Password({
-              Service: '',
-              Username: '',
-              Password: '',
-              Comment: '',
-            });
-            password_editor.stopEditing();
-            password_store.insert(0, u);
-            password_grid.getView().refresh();
-            password_grid.getSelectionModel().selectRow(0);
-            password_editor.startEditing(0);
-          }
-        },
-        {
-          ref : '../removeBtn',
-          iconCls: 'icon-task-delete',
-          disabled: true,
-          text: 'Delete Service',
-          handler : function () {
-             password_editor.stopEditing();
-             var s = password_grid.getSelectionModel().getSelections();
-             for(var i = 0, r; r = s[i]; i++) {
-               Ext.Ajax.request({
-                 url: '/passwd/' + r.get('Service') + '/' + r.get('Username'),
-                 method : 'DELETE',
-                 success: function(request, result) {
-                   password_store.reload ();
-                 },
-                 failure: function(request, result) {
-                   Ext.Msg.alert('Keychain', 'Service failed!');
-                 },
-               });
-             }
-           }
-          }]
-
-        });
-
-    function applyPasswordChanges() {
-      console.log('applyPasswordChanges');
-      mr = this.getStore().getModifiedRecords();
-      for (var i = 0; i < mr.length; i++) {
-        var r = mr[i];
-        var j = {
-          service: r.get('Service'),
-          username: r.get('Username'),
-          password: r.get('Password'),
-          comment: r.get('Comment'),
-        };
-        Ext.Ajax.request( {
-          waitMsg: "saving service...",
-          url: '/passwd/' + r.get('Service') + '/' + r.get('Username'),
-          method: 'POST',
-          jsonData:  j,
-          success: function (request, result) {
-            r.commit();
-          },
-          failure: function (request, result) {
-            Ext.Msg.alert('Keychain', 'Failed to edit service: ' + result.responseText);
-          },
-        });
-      }
-      this.getStore().reload();
-    }
-
-    password_store.on('update', applyPasswordChanges, password_grid);
-
-    password_grid.getSelectionModel().on('selectionchange', function(sm){
-        password_grid.removeBtn.setDisabled(sm.getCount() < 1);
-    });
-
-    password_panel = new Ext.Panel({
-      title: 'Keychain',
-      collapsible:true,
-      items: [ password_grid ],
-    });
-
- 
     // Overall tab panel
     // -----------------
 
