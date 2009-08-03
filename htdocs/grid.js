@@ -76,7 +76,7 @@ Ext.onReady(function(){
               editor: new fm.TextField({ allowBlank: false, }) },
           ],
         clicksToEdit:1,
-        width:700,
+        width:850,
         height:150,
 
         tbar: [{
@@ -171,6 +171,8 @@ Ext.onReady(function(){
       {name: 'Period', mapping: 'period'},
       {name: 'Args', mapping: 'args'},
       {name: 'Pid', mapping: 'pid'},
+      {name: 'Username', convert: function(v,r) { if (r.secret) return r.secret.username; else return ''; }},
+      {name: 'Service', convert: function(v,r) { if (r.secret) return r.secret.service; else return ''; }},
     ]);
 
     // create the Data Store
@@ -225,10 +227,18 @@ Ext.onReady(function(){
             },
             {header: 'Args', dataIndex: 'Args', sortable: false,
               editor : { xtype : 'textfield' }
-            }
+            },
+            {header: "Keychain User", dataIndex: 'Username', sortable: false,
+              editor: { xtype:'combo', triggerAction: 'all', store: password_store, displayField: "Username",
+                typeAhead: true },
+            },
+            {header: "Keychain Service", dataIndex: 'Service', sortable: false,
+              editor: { xtype:'combo', triggerAction: 'all', store: password_store, displayField: "Service",
+                typeAhead: true },
+            },
           ],
         clicksToEdit:1,
-        width:700,
+        width:850,
         height:150,
 
         tbar: [{
@@ -285,12 +295,18 @@ Ext.onReady(function(){
         var period = r.get('Period');
         if (!period)
            period = 0;
+        if (r.get('Username') && r.get('Service'))
+           secret = {'username': r.get('Username'), 'service': r.get('Service') };
+        else
+           secret = null;
+        console.log(secret);
         var j = {
           plugin: r.get('Plugin'),
           mode: r.get('Mode'),
           period: period,
           silo: r.get('Silo'),
-          args: r.get('Args').split(","),
+          args: r.get('Args'),
+          secret: secret,
         };
         Ext.Ajax.request( {
           waitMsg: "saving inbound task...",
@@ -327,7 +343,7 @@ Ext.onReady(function(){
 
     var tabs = new Ext.TabPanel({
       renderTo: 'user-grid',
-      width: 700,
+      width: 850,
       activeTab: 0,
       items: [
         password_panel,
