@@ -299,13 +299,14 @@ Ext.onReady(function(){
            secret = {'username': r.get('Username'), 'service': r.get('Service') };
         else
            secret = null;
-        console.log(secret);
+        var args = r.get('Args');
+        if (!args) args=[];
         var j = {
           plugin: r.get('Plugin'),
           mode: r.get('Mode'),
           period: period,
           silo: r.get('Silo'),
-          args: r.get('Args'),
+          args: args,
           secret: secret,
         };
         Ext.Ajax.request( {
