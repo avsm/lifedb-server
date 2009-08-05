@@ -70,14 +70,13 @@ WANTLIB=libz.1 libsqlite3.0 libpcre.0 libreadline.5.2 libncurses.5
 .PHONY: macdist
 macdist: all
 	rm -rf macdist
-	mkdir -p macdist/bin
 	mkdir -p macdist/lib
 	mkdir -p macdist/etc
 	cp -r ./htdocs macdist/
-	cp ./$(RESULT) macdist/bin/
+	cp ./$(RESULT) macdist/
 	for i in $(WANTLIB); do cp /opt/local/lib/$$i.dylib macdist/lib/$$i.dylib; done
 	cp ./config.json.in macdist/etc/lifedb.config.in
-	cp ./mime.types macdist/bin/mime.types
+	cp ./mime.types macdist/mime.types
 	cp ./scripts/run.sh macdist/run_server
 	cp ./scripts/set_passphrase.sh macdist/set_passphrase
 	mkdir -p macdist/plugins
