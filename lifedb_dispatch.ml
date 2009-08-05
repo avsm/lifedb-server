@@ -47,10 +47,8 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
   let url_list = List.filter ((<>) "") (Neturl.url_path url) in
   let url_hd = try List.hd url_list with _ -> "" in
   let url_path = Neturl.join_path (Neturl.url_path url) in
-  Log.logmod "URL" "%s %s (%s)" (match cgi#request_method with 
-    |`HEAD -> "HEAD" |`GET -> "GET" |`POST -> "POST" |`DELETE -> "DELETE" |_ -> "other")  url_path
-    (String.concat " " (List.map (fun a -> sprintf "%s=%s" a#name a#value) cgi#arguments));
-
+  Log.logmod "URL" "%s %s" (match cgi#request_method with 
+    |`HEAD -> "HEAD" |`GET -> "GET" |`POST -> "POST" |`DELETE -> "DELETE" |_ -> "other")  url_path;
   match check_auth cgi with
   (* not authenticated *)
   |false -> begin
