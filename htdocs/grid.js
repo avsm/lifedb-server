@@ -300,7 +300,10 @@ Ext.onReady(function(){
         else
            secret = null;
         var args = r.get('Args');
-        if (!args) args=[];
+        if (!args)
+          args=[];
+        else
+          args=args.split(",");
         var j = {
           plugin: r.get('Plugin'),
           mode: r.get('Mode'),
