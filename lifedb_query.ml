@@ -40,7 +40,7 @@ let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
           with _ -> raise (Lifedb_rpc.Invalid_rpc "unknown date path")
         in 
         let btm = Unix.gmtime 0. in
-        let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month; tm_mday=day} in
+        let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month-1; tm_mday=day} in
         let dateto = {datefrom with Unix.tm_hour=23; tm_min=59; tm_sec=59} in
         let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
         let sqlfrom = sqldate datefrom in
