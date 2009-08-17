@@ -175,5 +175,10 @@ The various JSON return types are defined in client/ocaml/lifedb.ml
 
  * /pltype/<plugin type>/icon : returns the icon via HTTP if it exists.
 
+ * /att/<attuid> : returns the attachment binary
+
+ * /q/contact/date/<year>/<month>/<day> : Returns all the contacts involved
+   in all the conversations in the time period.  <day> can be omitted.
+
  * All files in the "./htdocs" directory (the static_directory setting in the
    config file) are served up via the /static URL.
