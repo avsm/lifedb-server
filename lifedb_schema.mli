@@ -22,6 +22,8 @@ module Attachment : sig
     set_id : int64 option -> unit;
     file_name : string;
     set_file_name : string -> unit;
+    uid : string;
+    set_uid : string -> unit;
     mime_type : string;
     set_mime_type : string -> unit;
     save: int64; delete: unit
@@ -33,6 +35,7 @@ module Attachment : sig
   val t :
     ?id:int64 option ->
     file_name:string ->
+    uid:string ->
     mime_type:string ->
     Init.t -> t
   (** Can be used to construct a new object.  If [id] is not specified, it will be automatically assigned the first time [save] is called on the object.  The object is not committed to the database until [save] is invoked.  The [save] method will also return the [id] assigned to the object.
@@ -42,6 +45,7 @@ module Attachment : sig
   val get :
     ?id:int64 option ->
     ?file_name:string option ->
+    ?uid:string option ->
     ?mime_type:string option ->
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> t list
   (** Used to retrieve objects from the database.  If an argument is specified, it is included in the search criteria (all fields are ANDed together).
@@ -50,6 +54,11 @@ module Attachment : sig
 
   val get_by_file_name :
     file_name:string -> 
+    ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
+    t list
+
+  val get_by_uid :
+    uid:string -> 
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
     t list
 

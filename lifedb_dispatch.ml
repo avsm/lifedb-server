@@ -120,6 +120,9 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
     |(`GET|`HEAD), "doc" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Doc (List.nth url_list 1))
+    |(`GET|`HEAD), "att" ->
+      mark_get_rpc cgi;
+      Lifedb_query.dispatch lifedb syncdb env cgi (`Att (List.nth url_list 1))
     |(`GET|`HEAD), "pltype" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Mtype (List.tl url_list))

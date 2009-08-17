@@ -20,8 +20,9 @@ open Sql_orm.Schema
 let lifedb = make [
   "attachment" , [
     text ~flags:[`Unique; `Index] "file_name";
+    text ~flags:[`Unique; `Index] "uid";
     text "mime_type";
-  ], [ [], ["file_name"] ], default_opts;
+  ], [ [], ["file_name"]; [], ["uid"] ], default_opts;
 
   "contact" , [
     text "file_name";

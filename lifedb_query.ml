@@ -105,7 +105,7 @@ let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
        |_ -> raise (Lifedb_rpc.Resource_conflict "multiple pltypes")
      end
    end
-  |`Doc id ->
+  |`Doc id -> begin
      match LS.Entry.get_by_uid id lifedb with
      |[] -> Lifedb_rpc.return_error cgi `Not_found "doc not found" "id invalid"
      |[e] ->  begin
@@ -129,3 +129,10 @@ let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
        Lifedb_rpc.return_json cgi (Entry.json_of_doc r)
      end
      |_ -> raise (Lifedb_rpc.Resource_conflict "multiple ids")
+   end
+  |`Att uid -> begin
+    match LS.Attachment.get_by_uid uid lifedb with
+    |[] -> Lifedb_rpc.return_error cgi `Not_found "att not found" "id invalid"
+    |[e] -> Lifedb_rpc.return_file cgi e#file_name e#mime_type
+    |_ -> raise (Lifedb_rpc.Resource_conflict "multiple ids")
+  end

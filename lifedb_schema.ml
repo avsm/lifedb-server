@@ -106,25 +106,31 @@ module Attachment = struct
     set_id : int64 option -> unit;
     file_name : string;
     set_file_name : string -> unit;
+    uid : string;
+    set_uid : string -> unit;
     mime_type : string;
     set_mime_type : string -> unit;
     save: int64; delete: unit
   >
 
   let init db =
-    let sql = "create table if not exists attachment (id integer primary key autoincrement,file_name text,mime_type text);" in
+    let sql = "create table if not exists attachment (id integer primary key autoincrement,file_name text,uid text,mime_type text);" in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     let sql = "CREATE UNIQUE INDEX IF NOT EXISTS attachment_file_name_idx ON attachment (file_name) " in
+    db_must_ok db (fun () -> Sqlite3.exec db.db sql);
+    let sql = "CREATE UNIQUE INDEX IF NOT EXISTS attachment_uid_idx ON attachment (uid) " in
     db_must_ok db (fun () -> Sqlite3.exec db.db sql);
     ()
 
   (* object definition *)
-  let t ?(id=None) ~file_name ~mime_type db : t = object
+  let t ?(id=None) ~file_name ~uid ~mime_type db : t = object
     (* get functions *)
     val mutable _id = id
     method id : int64 option = _id
     val mutable _file_name = file_name
     method file_name : string = _file_name
+    val mutable _uid = uid
+    method uid : string = _uid
     val mutable _mime_type = mime_type
     method mime_type : string = _mime_type
 
@@ -133,6 +139,8 @@ module Attachment = struct
       _id <- v
     method set_file_name v =
       _file_name <- v
+    method set_uid v =
+      _uid <- v
     method set_mime_type v =
       _mime_type <- v
 
@@ -151,20 +159,22 @@ module Attachment = struct
       (* insert any foreign-one fields into their table and get id *)
       let _curobj_id = match _id with
       |None -> (* insert new record *)
-        let sql = "INSERT INTO attachment VALUES(NULL,?,?)" in
+        let sql = "INSERT INTO attachment VALUES(NULL,?,?,?)" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _file_name in Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _mime_type in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _uid in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _mime_type in Sqlite3.Data.TEXT v));
         db_must_done db (fun () -> Sqlite3.step stmt);
         let __id = Sqlite3.last_insert_rowid db.db in
         _id <- Some __id;
         __id
       |Some id -> (* update *)
-        let sql = "UPDATE attachment SET file_name=?,mime_type=? WHERE id=?" in
+        let sql = "UPDATE attachment SET file_name=?,uid=?,mime_type=? WHERE id=?" in
         let stmt = Sqlite3.prepare db.db sql in
         db_must_ok db (fun () -> Sqlite3.bind stmt 1 (let v = _file_name in Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _mime_type in Sqlite3.Data.TEXT v));
-        db_must_ok db (fun () -> Sqlite3.bind stmt 3 (Sqlite3.Data.INT id));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 2 (let v = _uid in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 3 (let v = _mime_type in Sqlite3.Data.TEXT v));
+        db_must_ok db (fun () -> Sqlite3.bind stmt 4 (Sqlite3.Data.INT id));
         db_must_done db (fun () -> Sqlite3.step stmt);
         id
       in
@@ -173,16 +183,17 @@ module Attachment = struct
   end
 
   (* General get function for any of the columns *)
-  let get ?(id=None) ?(file_name=None) ?(mime_type=None) ?(custom_where=("",[])) db =
+  let get ?(id=None) ?(file_name=None) ?(uid=None) ?(mime_type=None) ?(custom_where=("",[])) db =
     (* assemble the SQL query string *)
     let q = "" in
     let _first = ref true in
     let f () = match !_first with |true -> _first := false; " WHERE " |false -> " AND " in
     let q = match id with |None -> q |Some b -> q ^ (f()) ^ "attachment.id=?" in
     let q = match file_name with |None -> q |Some b -> q ^ (f()) ^ "attachment.file_name=?" in
+    let q = match uid with |None -> q |Some b -> q ^ (f()) ^ "attachment.uid=?" in
     let q = match mime_type with |None -> q |Some b -> q ^ (f()) ^ "attachment.mime_type=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ (f()) ^ "(" ^ w ^ ")" in
-    let sql="SELECT attachment.id, attachment.file_name, attachment.mime_type FROM attachment " ^ q in
+    let sql="SELECT attachment.id, attachment.file_name, attachment.uid, attachment.mime_type FROM attachment " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     (* bind the position variables to the statement *)
     let bindpos = ref 1 in
@@ -191,6 +202,10 @@ module Attachment = struct
       incr bindpos
     );
     ignore(match file_name with |None -> () |Some v ->
+      db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.TEXT v));
+      incr bindpos
+    );
+    ignore(match uid with |None -> () |Some v ->
       db_must_ok db (fun () -> Sqlite3.bind stmt !bindpos (Sqlite3.Data.TEXT v));
       incr bindpos
     );
@@ -217,8 +232,13 @@ module Attachment = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )
-      ~mime_type:(
+      ~uid:(
       (match Sqlite3.column stmt 2 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~mime_type:(
+      (match Sqlite3.column stmt 3 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )
@@ -231,7 +251,7 @@ module Attachment = struct
   let get_by_file_name ~file_name ?(custom_where=("",[])) db =
     let q = "WHERE attachment.file_name=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
-    let sql="SELECT attachment.id, attachment.file_name, attachment.mime_type FROM attachment " ^ q in
+    let sql="SELECT attachment.id, attachment.file_name, attachment.uid, attachment.mime_type FROM attachment " ^ q in
     let stmt=Sqlite3.prepare db.db sql in
     db_must_ok db (fun () -> let v = file_name in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
     ignore(match custom_where with |_,[] -> () |_,eb ->
@@ -254,8 +274,55 @@ module Attachment = struct
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )
-      ~mime_type:(
+      ~uid:(
       (match Sqlite3.column stmt 2 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~mime_type:(
+      (match Sqlite3.column stmt 3 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      (* foreign fields *)
+    db
+    in 
+    (* execute the SQL query *)
+    step_fold db stmt of_stmt
+
+  let get_by_uid ~uid ?(custom_where=("",[])) db =
+    let q = "WHERE attachment.uid=?" in
+    let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
+    let sql="SELECT attachment.id, attachment.file_name, attachment.uid, attachment.mime_type FROM attachment " ^ q in
+    let stmt=Sqlite3.prepare db.db sql in
+    db_must_ok db (fun () -> let v = uid in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
+    ignore(match custom_where with |_,[] -> () |_,eb ->
+      let pos = ref 2 in
+      List.iter (fun b ->
+        db_must_ok db (fun () -> Sqlite3.bind stmt !pos b);
+        incr pos;
+      ) eb);
+    (* convert statement into an ocaml object *)
+    let of_stmt stmt =
+    t
+      (* native fields *)
+      ~id:(
+      (match Sqlite3.column stmt 0 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: attachment id")))
+      )
+      ~file_name:(
+      (match Sqlite3.column stmt 1 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~uid:(
+      (match Sqlite3.column stmt 2 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~mime_type:(
+      (match Sqlite3.column stmt 3 with
         |Sqlite3.Data.NULL -> failwith "null of_stmt"
         |x -> Sqlite3.Data.to_string x)
       )

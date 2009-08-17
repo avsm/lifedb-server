@@ -42,7 +42,7 @@ let resolve_attachments rootdir fname db uid =
             let mime_type = try
                 Magic_mime.lookup (get_extension attfname)
               with _ -> "application/octet-stream" in
-            Attachment.t ~file_name:attfname ~mime_type db 
+            Attachment.t ~file_name:attfname ~mime_type ~uid db 
          |[a] -> a
          |_ -> assert false in
          Some a
