@@ -63,6 +63,7 @@ let lifedb = make [
     ["uid"],[];
     ["file_name"],[];
     ["created"],[];
+    ["from";"recipients"],[];
     [],["uid"];
     [],["file_name"]
   ], default_opts;

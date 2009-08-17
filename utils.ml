@@ -95,3 +95,8 @@ let results_of_search l =
     method results = List.length l
     method rows = l
   end
+
+let rec unique fn = function 
+| [] -> []
+| x :: xs -> 
+  [x] @ (unique fn (List.filter (fn x) xs))

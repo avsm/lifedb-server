@@ -126,7 +126,12 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
     |(`GET|`HEAD), "pltype" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Mtype (List.tl url_list))
-
+    |(`GET|`HEAD), "q" -> begin
+      mark_get_rpc cgi;
+      match url_list with
+      |_ :: "contact" :: mode :: tl -> Lifedb_query.dispatch lifedb syncdb env cgi (`Contact_query (mode,tl))
+      |_ -> raise (Lifedb_rpc.Invalid_rpc "only mode required with /q/")
+    end
     |_ -> raise (Invalid_rpc "Unknown request")
   end
 

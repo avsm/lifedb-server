@@ -156,5 +156,16 @@ module Rpc = struct
       month: int;
       days: int array
     > 
+
+    type json contact = <
+      first_name: string option; 
+      last_name: string option;
+      uid: string
+    > 
+    and contacts = <
+      results: int;
+      rows: contact list
+    >
+
   end
 end

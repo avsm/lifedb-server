@@ -136,3 +136,37 @@ let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
     |[e] -> Lifedb_rpc.return_file cgi e#file_name e#mime_type
     |_ -> raise (Lifedb_rpc.Resource_conflict "multiple ids")
   end
+  |`Contact_query (mode,tl) -> begin
+    match mode with
+    |"date" -> begin
+      let btm = Unix.gmtime 0. in
+      let fulldate = List.map (fun n -> try Some (int_of_string n) with _ -> None) tl in
+      match fulldate with
+      |[(Some year); (Some month); (Some day)] ->
+        let datefrom = {btm with Unix.tm_year=(year-1900); tm_mon=month-1; tm_mday=day} in
+        let dateto = {datefrom with Unix.tm_hour=23; tm_min=59; tm_sec=59} in
+        let sqldate x = Sqlite3.Data.INT (Int64.of_float (fst (Unix.handle_unix_error Unix.mktime x))) in
+        let sqlfrom = sqldate datefrom in
+        let sqlto = sqldate dateto in
+        let custom_where = "entry.created >= ? AND entry.created < ?", [sqlfrom; sqlto] in
+        let qs = LS.Entry.get_from_recipients ~custom_where lifedb in
+        let contact_of_res svc = match svc#contact with
+          |Some c -> Some (object 
+            method first_name=c#first_name 
+            method last_name=c#last_name 
+            method uid=c#uid
+          end )
+          |None -> None
+        in
+        let contacts = List.fold_left (fun a (frm,recip) ->
+          let r = (contact_of_res frm) :: (List.map contact_of_res recip) in
+          let r = List.fold_left (fun a -> function None -> a |Some b -> b :: a) [] r in
+          r @ a
+        ) [] qs in 
+        let contacts = results_of_search (unique (fun x y -> x#uid <> y#uid) contacts) in
+        Lifedb_rpc.return_json cgi (Query.json_of_contacts contacts)
+      
+      |_ -> Lifedb_rpc.return_error cgi `Not_found "bad query date" "need yr/<month>/<day>"
+    end
+    |_ -> Lifedb_rpc.return_error cgi `Not_found "bad mode" "bad mode"
+  end

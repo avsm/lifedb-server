@@ -1479,6 +1479,102 @@ module Entry = struct
     (* execute the SQL query *)
     step_fold db stmt of_stmt
 
+  let get_from_recipients  ?(custom_where=("",[])) db =
+    let q = "" in
+    let q = match custom_where with |"",_ -> q |w,_ -> q ^ "WHERE  (" ^ w ^ ")" in
+    let sql="SELECT entry_from.id, entry_from.name, entry_from.uid, entry_from.contact_id, entry.id, entry.from_id, entry_from_contact.id, entry_from_contact.file_name, entry_from_contact.uid, entry_from_contact.first_name, entry_from_contact.last_name, entry_from_contact.mtime FROM entry LEFT JOIN service AS entry_from ON (entry_from.id = entry.from_id) LEFT JOIN contact AS entry_from_contact ON (entry_from_contact.id = entry_from.contact_id) " ^ q in
+    let stmt=Sqlite3.prepare db.db sql in
+    ignore(match custom_where with |_,[] -> () |_,eb ->
+      let pos = ref 1 in
+      List.iter (fun b ->
+        db_must_ok db (fun () -> Sqlite3.bind stmt !pos b);
+        incr pos;
+      ) eb);
+    let t ~id ~from ~recipients db = (from,recipients) in
+    (* convert statement into an ocaml object *)
+    let of_stmt stmt =
+    t
+      (* native fields *)
+      ~id:(
+      (match Sqlite3.column stmt 4 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry id")))
+      )
+      (* foreign fields *)
+      ~from:(
+        Service.t
+          (* native fields *)
+          ~id:(
+          (match Sqlite3.column stmt 0 with
+            |Sqlite3.Data.NULL -> None
+            |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from id")))
+          )
+          ~name:(
+          (match Sqlite3.column stmt 1 with
+            |Sqlite3.Data.NULL -> failwith "null of_stmt"
+            |x -> Sqlite3.Data.to_string x)
+          )
+          ~uid:(
+          (match Sqlite3.column stmt 2 with
+            |Sqlite3.Data.NULL -> failwith "null of_stmt"
+            |x -> Sqlite3.Data.to_string x)
+          )
+          (* foreign fields *)
+          ~contact:(
+            (try
+            Some (
+            Contact.t
+              (* native fields *)
+              ~id:(
+              (match Sqlite3.column stmt 6 with
+                |Sqlite3.Data.NULL -> None
+                |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact id")))
+              )
+              ~file_name:(
+              (match Sqlite3.column stmt 7 with
+                |Sqlite3.Data.NULL -> failwith "null of_stmt"
+                |x -> Sqlite3.Data.to_string x)
+              )
+              ~uid:(
+              (match Sqlite3.column stmt 8 with
+                |Sqlite3.Data.NULL -> failwith "null of_stmt"
+                |x -> Sqlite3.Data.to_string x)
+              )
+              ~first_name:(
+              (match Sqlite3.column stmt 9 with
+                |Sqlite3.Data.NULL -> None
+                |x -> Some (Sqlite3.Data.to_string x))
+              )
+              ~last_name:(
+              (match Sqlite3.column stmt 10 with
+                |Sqlite3.Data.NULL -> None
+                |x -> Some (Sqlite3.Data.to_string x))
+              )
+              ~mtime:(
+              (match Sqlite3.column stmt 11 with
+                |Sqlite3.Data.NULL -> failwith "null of_stmt"
+                |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: entry_from_contact mtime"))
+              )
+              (* foreign fields *)
+            db
+            ) with _ -> None))
+        db
+        )
+      ~recipients:(
+        (* foreign many-many mapping field *)
+        let sql' = "select service_id from map_recipients_entry_service where entry_id=?" in
+        let stmt' = Sqlite3.prepare db.db sql' in
+        let entry__id = Sqlite3.column stmt 4 in
+        db_must_ok db (fun () -> Sqlite3.bind stmt' 1 entry__id);
+        List.flatten (step_fold db stmt' (fun s ->
+          let i = match Sqlite3.column s 0 with |Sqlite3.Data.INT i -> i |_ -> assert false in
+          Service.get ~id:(Some i) db)
+        ))
+    db
+    in 
+    (* execute the SQL query *)
+    step_fold db stmt of_stmt
+
   let get_by_uid ~uid ?(custom_where=("",[])) db =
     let q = "WHERE entry.uid=?" in
     let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in

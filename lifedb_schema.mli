@@ -286,6 +286,10 @@ module Entry : sig
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
     float list
 
+  val get_from_recipients :
+    ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
+    (Service.t * Service.t list) list
+
   val get_by_uid :
     uid:string -> 
     ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
