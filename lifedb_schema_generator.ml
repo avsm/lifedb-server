@@ -30,7 +30,7 @@ let lifedb = make [
     text ~flags:[`Optional] "first_name";
     text ~flags:[`Optional] "last_name";
     date "mtime";
-  ], [], default_opts;
+  ], [ [], ["uid"] ], default_opts;
 
   "mtype" , [
     text ~flags:[`Unique; `Index] "name";

@@ -177,5 +177,15 @@ let dispatch lifedb syncdb env (cgi:Netcgi.cgi_activation) = function
       let contacts = results_of_search (unique (fun x y -> x#uid <> y#uid) contacts) in
       Lifedb_rpc.return_json cgi (Query.json_of_contacts contacts)
     end
-    |_ -> Lifedb_rpc.return_error cgi `Not_found "bad mode" "bad mode"
+   |_ -> Lifedb_rpc.return_error cgi `Not_found "bad mode" "bad mode"
   end
+  |`Contact_list ->
+    let cs :> Query.contact list = LS.Contact.get lifedb in
+    let contacts = results_of_search cs in 
+    Lifedb_rpc.return_json cgi (Query.json_of_contacts contacts)
+  |`Contact_get uid -> begin
+    match LS.Contact.get_by_uid uid lifedb with
+    |[c] -> Lifedb_rpc.return_json cgi (Query.json_of_contact (c :> Query.contact))
+    |_ -> raise (Lifedb_rpc.Resource_not_found uid)
+  end  
+ 

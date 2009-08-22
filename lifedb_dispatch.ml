@@ -120,6 +120,12 @@ let dispatch (lifedb : Lifedb_schema.Init.t) (syncdb : Sync_schema.Init.t) env (
     |(`GET|`HEAD), "doc" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Doc (List.nth url_list 1))
+    |(`GET|`HEAD), "contact" -> begin
+      match url_list with
+      |[_] -> Lifedb_query.dispatch lifedb syncdb env cgi `Contact_list
+      |[_;uid] -> Lifedb_query.dispatch lifedb syncdb env cgi (`Contact_get uid)
+      |_ -> raise (Lifedb_rpc.Invalid_rpc "need 0/1 args")
+    end
     |(`GET|`HEAD), "att" ->
       mark_get_rpc cgi;
       Lifedb_query.dispatch lifedb syncdb env cgi (`Att (List.nth url_list 1))

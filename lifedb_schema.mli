@@ -107,6 +107,11 @@ module Contact : sig
    @raise Sql_error if a database error is encountered
     *)
 
+  val get_by_uid :
+    uid:string -> 
+    ?custom_where:string * Sqlite3.Data.t list -> Init.t -> 
+    t list
+
 end
 module Mtype : sig
   type t = <

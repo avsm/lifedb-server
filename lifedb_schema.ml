@@ -516,6 +516,58 @@ module Contact = struct
     (* execute the SQL query *)
     step_fold db stmt of_stmt
 
+  let get_by_uid ~uid ?(custom_where=("",[])) db =
+    let q = "WHERE contact.uid=?" in
+    let q = match custom_where with |"",_ -> q |w,_ -> q ^ " AND  (" ^ w ^ ")" in
+    let sql="SELECT contact.id, contact.file_name, contact.uid, contact.first_name, contact.last_name, contact.mtime FROM contact " ^ q in
+    let stmt=Sqlite3.prepare db.db sql in
+    db_must_ok db (fun () -> let v = uid in Sqlite3.bind stmt 1 (Sqlite3.Data.TEXT v));
+    ignore(match custom_where with |_,[] -> () |_,eb ->
+      let pos = ref 2 in
+      List.iter (fun b ->
+        db_must_ok db (fun () -> Sqlite3.bind stmt !pos b);
+        incr pos;
+      ) eb);
+    (* convert statement into an ocaml object *)
+    let of_stmt stmt =
+    t
+      (* native fields *)
+      ~id:(
+      (match Sqlite3.column stmt 0 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (match x with |Sqlite3.Data.INT i -> i |x -> (try Int64.of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: contact id")))
+      )
+      ~file_name:(
+      (match Sqlite3.column stmt 1 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~uid:(
+      (match Sqlite3.column stmt 2 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> Sqlite3.Data.to_string x)
+      )
+      ~first_name:(
+      (match Sqlite3.column stmt 3 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (Sqlite3.Data.to_string x))
+      )
+      ~last_name:(
+      (match Sqlite3.column stmt 4 with
+        |Sqlite3.Data.NULL -> None
+        |x -> Some (Sqlite3.Data.to_string x))
+      )
+      ~mtime:(
+      (match Sqlite3.column stmt 5 with
+        |Sqlite3.Data.NULL -> failwith "null of_stmt"
+        |x -> match x with |Sqlite3.Data.FLOAT i -> i|x -> (try float_of_string (Sqlite3.Data.to_string x) with _ -> failwith "error: contact mtime"))
+      )
+      (* foreign fields *)
+    db
+    in 
+    (* execute the SQL query *)
+    step_fold db stmt of_stmt
+
 end
 
 module Mtype = struct
